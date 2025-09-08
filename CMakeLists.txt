@@ -15,7 +15,7 @@ igl_include(glfw)
 igl_include(stb)
 #igl_include(predicates)
 #igl_include(xml)
-#igl_include(copyleft cgal)
+igl_include(copyleft cgal)
 #igl_include(copyleft comiso)
 #igl_include(copyleft core)
 #igl_include(copyleft cork)
@@ -38,7 +38,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   igl::stb
   # igl::predicates
   # igl::xml
-  # igl_copyleft::cgal
+  igl_copyleft::cgal
   # igl_copyleft::comiso
   # igl_copyleft::core
   # igl_copyleft::cork

@@ -54,6 +54,10 @@
 		    xorg.libXinerama
 		    xorg.libXcursor
 		    xorg.libXi
+
+		    boost
+		    gmp
+		    mpfr
                   ]
                   ++ (if system == "aarch64-darwin" then [ ] else [ gdb ]);
 
