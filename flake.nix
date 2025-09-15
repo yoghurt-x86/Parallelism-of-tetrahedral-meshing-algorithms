@@ -18,7 +18,7 @@
         inputs.nixpkgs.lib.genAttrs supportedSystems (
           system:
           f {
-            pkgs = import inputs.nixpkgs { inherit system; };
+            pkgs = import inputs.nixpkgs { inherit system; config.allowUnfree = true; };
           }
         );
     in
@@ -46,6 +46,7 @@
                     lcov
                     vcpkg
                     vcpkg-tool
+#                    vscode
 
 		    # libigl dependencies:
 		    glfw
@@ -58,7 +59,10 @@
 		    boost
 		    gmp
 		    mpfr
-                  ]
+
+		    #ide
+		    jetbrains.clion
+		  ]
                   ++ (if system == "aarch64-darwin" then [ ] else [ gdb ]);
 
                 # Set up library paths for X11 libraries

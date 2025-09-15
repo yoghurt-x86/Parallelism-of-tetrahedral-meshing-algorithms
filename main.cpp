@@ -1,9 +1,16 @@
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/readOBJ.h>
 #include <igl/copyleft/tetgen/tetrahedralize.h>
+#include <igl/copyleft/cgal/CGAL_includes.hpp>
 #include <igl/barycenter.h>
 #include <igl/stb/read_image.h>
 #include <iostream>
+#include <vector>
+#include <map>
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef CGAL::Delaunay_triangulation_3<K> Delaunay;
+typedef Delaunay::Point Point;
 
 // Input mesh
 Eigen::MatrixXd V;
@@ -20,11 +27,110 @@ Eigen::MatrixXd Bc;
 Eigen::MatrixXd dV;
 Eigen::MatrixXi dF;
 
+// Delaunay
+Eigen::MatrixXd DTV;
+Eigen::MatrixXi DTT;
+Eigen::MatrixXd DBc;
+
+// Delaunay diplay triangles
+Eigen::MatrixXd dDV;
+Eigen::MatrixXi dDF;
+
 // matcap texture
 Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> R,G,B,A;
 
-bool displayTetrahedralMesh = true;
+enum Display {
+  DISPLAY_INPUT,
+  DISPLAY_TETGEN,
+  DISPLAY_DELAUNAY,
+};
 
+Display display = DISPLAY_INPUT;
+
+void create_delaunay() {
+  // Create 3D Delaunay triangulation using CGAL
+  Delaunay dt;
+  std::vector<Point> points;
+
+  // Convert Eigen vertices to CGAL points
+  for(int i = 0; i < V.rows(); i++) {
+    points.push_back(Point(V(i,0), V(i,1), V(i,2)));
+  }
+
+  // Insert points into Delaunay triangulation
+  dt.insert(points.begin(), points.end());
+
+  // Extract tetrahedra
+  std::vector<std::array<int, 4>> tets;
+  std::map<Delaunay::Vertex_handle, int> vertex_map;
+
+  // Create vertex mapping
+  int vertex_idx = 0;
+  for(auto vit = dt.finite_vertices_begin(); vit != dt.finite_vertices_end(); ++vit) {
+    vertex_map[vit] = vertex_idx++;
+  }
+
+  // Extract tetrahedra indices
+  for(auto cit = dt.finite_cells_begin(); cit != dt.finite_cells_end(); ++cit) {
+    std::array<int, 4> tet;
+    for(int j = 0; j < 4; j++) {
+      tet[j] = vertex_map[cit->vertex(j)];
+    }
+    tets.push_back(tet);
+  }
+
+  // Convert back to Eigen matrices
+  DTV = V; // Vertices remain the same
+  DTT.resize(tets.size(), 4);
+  for(int i = 0; i < tets.size(); i++) {
+    for(int j = 0; j < 4; j++) {
+      DTT(i, j) = tets[i][j];
+    }
+  }
+
+}
+
+void update_mesh(igl::opengl::glfw::Viewer& viewer)
+{
+  viewer.data().clear();
+
+  switch (display) {
+    case DISPLAY_INPUT:
+      viewer.data().set_mesh(V,F);
+      break;
+    case DISPLAY_TETGEN:
+      viewer.data().set_mesh(dV, dF);
+      break;
+    case DISPLAY_DELAUNAY:
+      viewer.data().set_mesh(dDV, dDF);
+      break;
+  }
+
+  viewer.data().set_texture(R,G,B,A);
+  viewer.data().use_matcap = true;
+  viewer.data().set_face_based(true);
+}
+
+void display_delaunay(igl::opengl::glfw::Viewer& viewer, unsigned char key)
+{
+  using namespace std;
+  using namespace Eigen;
+
+  dDV = MatrixXd(DTT.rows()*4,3);
+  dDF = MatrixXi(DTT.rows()*4,3);
+
+  for (unsigned i=0; i<DTT.rows();++i)
+  {
+    dDV.row(i*4+0) = DTV.row(DTT(i,0));
+    dDV.row(i*4+1) = DTV.row(DTT(i,1));
+    dDV.row(i*4+2) = DTV.row(DTT(i,2));
+    dDV.row(i*4+3) = DTV.row(DTT(i,3));
+    dDF.row(i*4+0) << (i*4)+0, (i*4)+1, (i*4)+3;
+    dDF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
+    dDF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
+    dDF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
+  }
+}
 
 void display_tetrahedra(igl::opengl::glfw::Viewer& viewer, unsigned char key)
 {
@@ -62,39 +168,25 @@ void display_tetrahedra(igl::opengl::glfw::Viewer& viewer, unsigned char key)
     dF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
   }
 
-  viewer.data().clear();
-  viewer.data().set_mesh(dV,dF);
-  viewer.data().set_face_based(true);
-  viewer.data().set_texture(R,G,B,A);
-  viewer.data().use_matcap = true;
+  update_mesh(viewer);
 }
-
-
-void change_mesh(igl::opengl::glfw::Viewer& viewer) 
-{
-    displayTetrahedralMesh = !displayTetrahedralMesh;
-    viewer.data().clear();
-
-    if(displayTetrahedralMesh)
-    {
-      viewer.data().set_mesh(dV, dF);
-    }
-    else 
-    {
-      viewer.data().set_mesh(V,F);
-    }
-    viewer.data().set_texture(R,G,B,A);
-    viewer.data().use_matcap = true;
-    viewer.data().set_face_based(true);
-}
-
 
 bool key_down(igl::opengl::glfw::Viewer& viewer, unsigned char key, int modifier)
 {
   std::cout << "Input: " << "0x" << std::hex << static_cast<unsigned int>(static_cast<unsigned char>(key)) << std::endl;
 
-  if (key == 0x20) {
-    change_mesh(viewer);
+  if (key == 0x51) {
+    display = DISPLAY_INPUT;
+    update_mesh(viewer);
+  }
+  if (key == 0x57) {
+    display = DISPLAY_TETGEN;
+    update_mesh(viewer);
+  }
+  if (key == 0x45) {
+    display = DISPLAY_DELAUNAY;
+    display_delaunay(viewer, key);
+    update_mesh(viewer);
   }
   if (key >= '1' && key <= '9'){
     display_tetrahedra(viewer, key);
@@ -114,10 +206,12 @@ int main(int argc, char *argv[])
   // Compute barycenters
   igl::barycenter(TV,TT,Bc);
 
+  // Create delaunay using cgal
+  create_delaunay();
+
   // Add matcap
   igl::stb::read_image("../matcap/ceramic_dark.png", R,G,B,A); 
 
-  
   // Plot the mesh
   igl::opengl::glfw::Viewer viewer;
   viewer.core().background_color.setConstant(0.3f);
