@@ -11,6 +11,7 @@
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Delaunay_triangulation_3<K> Delaunay;
 typedef Delaunay::Point Point;
+typedef Delaunay::Vertex_handle Vertex_handle;
 
 // Input mesh
 Eigen::MatrixXd V;
@@ -30,6 +31,7 @@ Eigen::MatrixXi dF;
 // Delaunay
 Eigen::MatrixXd DTV;
 Eigen::MatrixXi DTT;
+Eigen::MatrixXi DTF;
 Eigen::MatrixXd DBc;
 
 // Delaunay diplay triangles
@@ -61,33 +63,71 @@ void create_delaunay() {
   dt.insert(points.begin(), points.end());
 
   // Extract tetrahedra
-  std::vector<std::array<int, 4>> tets;
-  std::map<Delaunay::Vertex_handle, int> vertex_map;
 
-  // Create vertex mapping
-  int vertex_idx = 0;
-  for(auto vit = dt.finite_vertices_begin(); vit != dt.finite_vertices_end(); ++vit) {
-    vertex_map[vit] = vertex_idx++;
-  }
+  // Vertex extraction (same as above)
+    std::map<Vertex_handle, int> vertex_index_map;
+    std::vector<Point> vertices;
 
-  // Extract tetrahedra indices
-  for(auto cit = dt.finite_cells_begin(); cit != dt.finite_cells_end(); ++cit) {
-    std::array<int, 4> tet;
-    for(int j = 0; j < 4; j++) {
-      tet[j] = vertex_map[cit->vertex(j)];
+    int vertex_count = 0;
+    for (auto vit = dt.finite_vertices_begin(); vit != dt.finite_vertices_end(); ++vit) {
+        vertex_index_map[vit] = vertex_count++;
+        vertices.push_back(vit->point());
     }
-    tets.push_back(tet);
-  }
 
-  // Convert back to Eigen matrices
-  DTV = V; // Vertices remain the same
-  DTT.resize(tets.size(), 4);
-  for(int i = 0; i < tets.size(); i++) {
-    for(int j = 0; j < 4; j++) {
-      DTT(i, j) = tets[i][j];
+    DTV.resize(vertex_count, 3);
+    for (int i = 0; i < vertex_count; ++i) {
+        DTV(i, 0) = CGAL::to_double(vertices[i].x());
+        DTV(i, 1) = CGAL::to_double(vertices[i].y());
+        DTV(i, 2) = CGAL::to_double(vertices[i].z());
     }
-  }
 
+    // Tetrahedra extraction (same as above)
+    std::vector<std::array<int, 4>> tetrahedra;
+    for (auto cit = dt.finite_cells_begin(); cit != dt.finite_cells_end(); ++cit) {
+        std::array<int, 4> tet;
+        for (int i = 0; i < 4; ++i) {
+            tet[i] = vertex_index_map[cit->vertex(i)];
+        }
+        tetrahedra.push_back(tet);
+    }
+
+    DTT.resize(tetrahedra.size(), 4);
+    for (int i = 0; i < tetrahedra.size(); ++i) {
+        for (int j = 0; j < 4; ++j) {
+            DTT(i, j) = tetrahedra[i][j];
+        }
+    }
+
+    // Extract ALL faces from tetrahedra
+    std::set<std::array<int, 3>> unique_faces;
+
+    for (const auto& tet : tetrahedra) {
+        // Each tetrahedron has 4 faces
+        std::array<std::array<int, 3>, 4> faces = {{
+            {tet[0], tet[1], tet[2]},  // opposite to vertex 3
+            {tet[0], tet[1], tet[3]},  // opposite to vertex 2
+            {tet[0], tet[2], tet[3]},  // opposite to vertex 1
+            {tet[1], tet[2], tet[3]}   // opposite to vertex 0
+        }};
+
+        for (auto& face : faces) {
+            // Sort vertices to ensure consistent representation
+            std::sort(face.begin(), face.end());
+            unique_faces.insert(face);
+        }
+    }
+
+    // Convert to matrix
+    DTF.resize(unique_faces.size(), 3);
+    int face_idx = 0;
+    for (const auto& face : unique_faces) {
+        for (int j = 0; j < 3; ++j) {
+            DTF(face_idx, j) = face[j];
+        }
+        face_idx++;
+    }
+
+    igl::barycenter(DTV,DTT,DBc);
 }
 
 void update_mesh(igl::opengl::glfw::Viewer& viewer)
@@ -116,20 +156,38 @@ void display_delaunay(igl::opengl::glfw::Viewer& viewer, unsigned char key)
   using namespace std;
   using namespace Eigen;
 
-  dDV = MatrixXd(DTT.rows()*4,3);
-  dDF = MatrixXi(DTT.rows()*4,3);
-
-  for (unsigned i=0; i<DTT.rows();++i)
+  if (key < '1' && key > '9')
   {
-    dDV.row(i*4+0) = DTV.row(DTT(i,0));
-    dDV.row(i*4+1) = DTV.row(DTT(i,1));
-    dDV.row(i*4+2) = DTV.row(DTT(i,2));
-    dDV.row(i*4+3) = DTV.row(DTT(i,3));
+    return;
+  }
+
+  double t = double((key - '1')+1) / 9.0;
+
+  VectorXd v = DBc.col(2).array() - DBc.col(2).minCoeff();
+  v /= v.col(0).maxCoeff();
+
+  vector<int> s;
+
+  for (unsigned i=0; i<v.size();++i)
+    if (v(i) < t)
+      s.push_back(i);
+
+  dDV = MatrixXd(s.size()*4,3);
+  dDF = MatrixXi(s.size()*4,3);
+
+  for (unsigned i=0; i<s.size();++i)
+  {
+    dDV.row(i*4+0) = DTV.row(DTT(s[i],0));
+    dDV.row(i*4+1) = DTV.row(DTT(s[i],1));
+    dDV.row(i*4+2) = DTV.row(DTT(s[i],2));
+    dDV.row(i*4+3) = DTV.row(DTT(s[i],3));
     dDF.row(i*4+0) << (i*4)+0, (i*4)+1, (i*4)+3;
     dDF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
     dDF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
     dDF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
   }
+
+  update_mesh(viewer);
 }
 
 void display_tetrahedra(igl::opengl::glfw::Viewer& viewer, unsigned char key)
@@ -185,29 +243,36 @@ bool key_down(igl::opengl::glfw::Viewer& viewer, unsigned char key, int modifier
   }
   if (key == 0x45) {
     display = DISPLAY_DELAUNAY;
-    display_delaunay(viewer, key);
     update_mesh(viewer);
   }
   if (key >= '1' && key <= '9'){
     display_tetrahedra(viewer, key);
+    display_delaunay(viewer, key);
   }
   return false;
 }
 
+const std::string mesh = "../meshes/spot_triangulated.obj";
+//const std::string mesh = "../meshes/tetrahedron.obj";
+
 int main(int argc, char *argv[])
 {
-  if(!igl::readOBJ("../meshes/spot_triangulated.obj", V, F)){
+  if(!igl::readOBJ(mesh, V, F)){
     std::cout << "Failed to load obj\n";
   }
 
   // Tetrahedralize the interior
   igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
+  std::cout << TV.size() << std::endl;
+
 
   // Compute barycenters
   igl::barycenter(TV,TT,Bc);
 
   // Create delaunay using cgal
   create_delaunay();
+  std::cout << DTV.size() << std::endl;
+  std::cout << DTF.size() << std::endl;
 
   // Add matcap
   igl::stb::read_image("../matcap/ceramic_dark.png", R,G,B,A); 
