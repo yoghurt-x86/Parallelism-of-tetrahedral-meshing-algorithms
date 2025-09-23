@@ -23,6 +23,9 @@ Eigen::MatrixXd TV;
 Eigen::MatrixXi TT;
 Eigen::MatrixXi TF;
 Eigen::MatrixXd Bc;
+Eigen::MatrixXd TTVC;
+Eigen::MatrixXd C;
+
 
 // tetrahedra diplay triangles
 Eigen::MatrixXd dV;
@@ -33,6 +36,7 @@ Eigen::MatrixXd DTV;
 Eigen::MatrixXi DTT;
 Eigen::MatrixXi DTF;
 Eigen::MatrixXd DBc;
+Eigen::MatrixXd DTTVC;
 
 // Delaunay diplay triangles
 Eigen::MatrixXd dDV;
@@ -130,25 +134,28 @@ void create_delaunay() {
     igl::barycenter(DTV,DTT,DBc);
 }
 
-void update_mesh(igl::opengl::glfw::Viewer& viewer)
+void update_view(igl::opengl::glfw::Viewer& viewer)
 {
   viewer.data().clear();
+  viewer.data().set_face_based(true);
 
   switch (display) {
     case DISPLAY_INPUT:
       viewer.data().set_mesh(V,F);
+      viewer.data().set_colors(C);
       break;
     case DISPLAY_TETGEN:
       viewer.data().set_mesh(dV, dF);
+      viewer.data().set_colors(TTVC);
       break;
     case DISPLAY_DELAUNAY:
       viewer.data().set_mesh(dDV, dDF);
+      viewer.data().set_colors(DTTVC);
       break;
   }
 
-  viewer.data().set_texture(R,G,B,A);
-  viewer.data().use_matcap = true;
-  viewer.data().set_face_based(true);
+  //viewer.data().set_texture(R,G,B,A);
+  //viewer.data().use_matcap = true;
 }
 
 void display_delaunay(igl::opengl::glfw::Viewer& viewer, unsigned char key)
@@ -166,28 +173,62 @@ void display_delaunay(igl::opengl::glfw::Viewer& viewer, unsigned char key)
   VectorXd v = DBc.col(2).array() - DBc.col(2).minCoeff();
   v /= v.col(0).maxCoeff();
 
-  vector<int> s;
+  vector<int> tet_i;
 
   for (unsigned i=0; i<v.size();++i)
     if (v(i) < t)
-      s.push_back(i);
+      tet_i.push_back(i);
 
-  dDV = MatrixXd(s.size()*4,3);
-  dDF = MatrixXi(s.size()*4,3);
+  dDV = MatrixXd(tet_i.size()*4,3);
+  dDF = MatrixXi(tet_i.size()*4,3);
 
-  for (unsigned i=0; i<s.size();++i)
+  for (unsigned i=0; i<tet_i.size();++i)
   {
-    dDV.row(i*4+0) = DTV.row(DTT(s[i],0));
-    dDV.row(i*4+1) = DTV.row(DTT(s[i],1));
-    dDV.row(i*4+2) = DTV.row(DTT(s[i],2));
-    dDV.row(i*4+3) = DTV.row(DTT(s[i],3));
+    dDV.row(i*4+0) = DTV.row(DTT(tet_i[i],0));
+    dDV.row(i*4+1) = DTV.row(DTT(tet_i[i],1));
+    dDV.row(i*4+2) = DTV.row(DTT(tet_i[i],2));
+    dDV.row(i*4+3) = DTV.row(DTT(tet_i[i],3));
     dDF.row(i*4+0) << (i*4)+0, (i*4)+1, (i*4)+3;
     dDF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
     dDF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
     dDF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
   }
 
-  update_mesh(viewer);
+  VectorXd volumes = VectorXd(tet_i.size());
+  DTTVC = MatrixXd(dDV.rows(),3);
+
+  for (unsigned i=0; i<tet_i.size();++i) {
+    const auto a = DTV.row(DTT(tet_i[i], 0));
+    const auto b = DTV.row(DTT(tet_i[i], 2)); // weird vertex order...
+    const auto c = DTV.row(DTT(tet_i[i], 1));
+    const auto d = DTV.row(DTT(tet_i[i], 3));
+
+    // Calculate volumes x6 (Will be normalized)
+    volumes(i) =
+        (a.x()-d.x())*(b.y()-d.y())*(c.z()-d.z())
+      + (b.x()-d.x())*(c.y()-d.y())*(a.z()-d.z())
+      + (c.x()-d.x())*(a.y()-d.y())*(b.z()-d.z())
+      - (c.x()-d.x())*(b.y()-d.y())*(a.z()-d.z())
+      - (b.x()-d.x())*(a.y()-d.y())*(c.z()-d.z())
+      - (a.x()-d.x())*(c.y()-d.y())*(b.z()-d.z());
+    //if (volumes(i) == NAN || volumes(i) == INFINITY || volumes(i) == -INFINITY)
+    //  volumes(i) == 0.0;
+  }
+
+  //normalize volumes
+  volumes.array() -= volumes.minCoeff();
+  volumes /= volumes.maxCoeff();
+
+  for (unsigned i=0; i<tet_i.size();++i) {
+    DTTVC.row(i*4+0) << 1.0, volumes(i), volumes(i);
+    DTTVC.row(i*4+1) << 1.0, volumes(i), volumes(i);
+    DTTVC.row(i*4+2) << 1.0, volumes(i), volumes(i);
+    DTTVC.row(i*4+3) << 1.0, volumes(i), volumes(i);
+  }
+  update_view(viewer);
+}
+
+void calculate_volumes(igl::opengl::glfw::Viewer& viewer) {
 }
 
 void display_tetrahedra(igl::opengl::glfw::Viewer& viewer, unsigned char key)
@@ -205,45 +246,81 @@ void display_tetrahedra(igl::opengl::glfw::Viewer& viewer, unsigned char key)
   VectorXd v = Bc.col(2).array() - Bc.col(2).minCoeff();
   v /= v.col(0).maxCoeff();
 
-  vector<int> s;
+  cout << v << endl;
+
+  vector<int> tet_i;
 
   for (unsigned i=0; i<v.size();++i)
     if (v(i) < t)
-      s.push_back(i);
+      tet_i.push_back(i);
 
-  dV = MatrixXd(s.size()*4,3);
-  dF = MatrixXi(s.size()*4,3);
+  dV = MatrixXd(tet_i.size()*4,3);
+  dF = MatrixXi(tet_i.size()*4,3);
 
-  for (unsigned i=0; i<s.size();++i)
+  for (unsigned i=0; i<tet_i.size();++i)
   {
-    dV.row(i*4+0) = TV.row(TT(s[i],0));
-    dV.row(i*4+1) = TV.row(TT(s[i],1));
-    dV.row(i*4+2) = TV.row(TT(s[i],2));
-    dV.row(i*4+3) = TV.row(TT(s[i],3));
+    dV.row(i*4+0) = TV.row(TT(tet_i[i],0));
+    dV.row(i*4+1) = TV.row(TT(tet_i[i],1));
+    dV.row(i*4+2) = TV.row(TT(tet_i[i],2));
+    dV.row(i*4+3) = TV.row(TT(tet_i[i],3));
     dF.row(i*4+0) << (i*4)+0, (i*4)+1, (i*4)+3;
     dF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
     dF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
     dF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
   }
 
-  update_mesh(viewer);
+  VectorXd volumes = VectorXd(tet_i.size());
+  TTVC = MatrixXd(dV.rows(),3);
+
+  for (unsigned i=0; i<tet_i.size();++i) {
+    const auto a = TV.row(TT(tet_i[i], 0));
+    const auto b = TV.row(TT(tet_i[i], 2)); // weird vertex order...
+    const auto c = TV.row(TT(tet_i[i], 1));
+    const auto d = TV.row(TT(tet_i[i], 3));
+
+    // Calculate volumes x6 (Will be normalized)
+    volumes(i) =
+        (a.x()-d.x())*(b.y()-d.y())*(c.z()-d.z())
+      + (b.x()-d.x())*(c.y()-d.y())*(a.z()-d.z())
+      + (c.x()-d.x())*(a.y()-d.y())*(b.z()-d.z())
+      - (c.x()-d.x())*(b.y()-d.y())*(a.z()-d.z())
+      - (b.x()-d.x())*(a.y()-d.y())*(c.z()-d.z())
+      - (a.x()-d.x())*(c.y()-d.y())*(b.z()-d.z());
+    //if (volumes(i) == NAN || volumes(i) == INFINITY || volumes(i) == -INFINITY)
+    //  volumes(i) == 0.0;
+  }
+
+  //normalize volumes
+  volumes.array() -= volumes.minCoeff();
+  volumes /= volumes.maxCoeff();
+
+  for (unsigned i=0; i<tet_i.size();++i) {
+    TTVC.row(i*4+0) << 1.0, volumes(i), volumes(i);
+    TTVC.row(i*4+1) << 1.0, volumes(i), volumes(i);
+    TTVC.row(i*4+2) << 1.0, volumes(i), volumes(i);
+    TTVC.row(i*4+3) << 1.0, volumes(i), volumes(i);
+  }
+
+  update_view(viewer);
 }
+
 
 bool key_down(igl::opengl::glfw::Viewer& viewer, unsigned char key, int modifier)
 {
   std::cout << "Input: " << "0x" << std::hex << static_cast<unsigned int>(static_cast<unsigned char>(key)) << std::endl;
 
+
   if (key == 0x51) {
     display = DISPLAY_INPUT;
-    update_mesh(viewer);
+    update_view(viewer);
   }
   if (key == 0x57) {
     display = DISPLAY_TETGEN;
-    update_mesh(viewer);
+    update_view(viewer);
   }
   if (key == 0x45) {
     display = DISPLAY_DELAUNAY;
-    update_mesh(viewer);
+    update_view(viewer);
   }
   if (key >= '1' && key <= '9'){
     display_tetrahedra(viewer, key);
@@ -257,9 +334,18 @@ const std::string mesh = "../meshes/spot_triangulated.obj";
 
 int main(int argc, char *argv[])
 {
+  using namespace std;
   if(!igl::readOBJ(mesh, V, F)){
     std::cout << "Failed to load obj\n";
   }
+
+  C =
+    (V.rowwise()            - V.colwise().minCoeff()).array().rowwise()/
+    (V.colwise().maxCoeff() - V.colwise().minCoeff()).array();
+
+  cout << "V SIZE: " << std::to_string(V.size()) << endl;
+  cout << "C SIZE: " << std::to_string(C.size()) << endl;
+
 
   // Tetrahedralize the interior
   igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
