@@ -60,14 +60,14 @@
 		    gmp
 		    mpfr
 
-		    #ide
-		    jetbrains.clion
+            jetbrains.clion
 		  ]
                   ++ (if system == "aarch64-darwin" then [ ] else [ gdb ]);
 
                 # Set up library paths for X11 libraries
                 shellHook = ''
                   export LD_LIBRARY_PATH="${pkgs.xorg.libX11}/lib:$LD_LIBRARY_PATH"
+                  export CMAKE_PREFIX_PATH="${pkgs.boost.dev}:${pkgs.boost}:$CMAKE_PREFIX_PATH"
                   echo "X11 libraries configured. If running on Wayland, start Xwayland with 'Xwayland :10' and set 'export DISPLAY=:10'"
                 '';
               };

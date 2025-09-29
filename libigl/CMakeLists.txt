@@ -10,12 +10,12 @@ include(libigl)
 igl_include(glfw)
 # Other modules you could enable
 #igl_include(embree)
-#igl_include(imgui)
+igl_include(imgui)
 #igl_include(opengl)
 igl_include(stb)
 #igl_include(predicates)
 #igl_include(xml)
-igl_include(copyleft cgal)
+#igl_include(copyleft cgal)
 #igl_include(copyleft comiso)
 #igl_include(copyleft core)
 #igl_include(copyleft cork)
@@ -23,6 +23,21 @@ igl_include(copyleft tetgen)
 #igl_include(restricted matlab)
 #igl_include(restricted mosek)
 #igl_include(restricted triangle)
+
+# Fetch CGAL from GitHub
+include(FetchContent)
+FetchContent_Declare(
+  CGAL
+  GIT_REPOSITORY https://github.com/CGAL/cgal.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(CGAL)
+
+# Set CGAL_DIR to the fetched CGAL location
+set(CGAL_DIR "${cgal_SOURCE_DIR}")
+
+# Find CGAL package
+find_package(CGAL REQUIRED)
 
 # Add your project files
 file(GLOB SRC_FILES *.cpp)
@@ -33,12 +48,12 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   igl::glfw
   ## Other modules you could link to
   # igl::embree
-  # igl::imgui
+  igl::imgui
   # igl::opengl
   igl::stb
   # igl::predicates
   # igl::xml
-  igl_copyleft::cgal
+  #igl_copyleft::cgal
   # igl_copyleft::comiso
   # igl_copyleft::core
   # igl_copyleft::cork
@@ -46,4 +61,5 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   # igl_restricted::matlab
   # igl_restricted::mosek
   # igl_restricted::triangle
+  CGAL::CGAL
   )
