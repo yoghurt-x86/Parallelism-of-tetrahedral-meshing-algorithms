@@ -1,3 +1,4 @@
+import TetMesh;
 #include <igl/opengl/glfw/Viewer.h>
 #include <igl/opengl/glfw/imgui/ImGuiPlugin.h>
 #include <igl/opengl/glfw/imgui/ImGuiMenu.h>
@@ -27,17 +28,17 @@ Eigen::MatrixXd V;
 Eigen::MatrixXi F;
 
 // Tetrahedralized interior
-Eigen::MatrixXd TV;
-Eigen::MatrixXi TT;
-Eigen::MatrixXi TF;
-Eigen::MatrixXd Bc;
+//Eigen::MatrixXd TV;
+//Eigen::MatrixXi TT;
+//Eigen::MatrixXi TF;
+//Eigen::MatrixXd Bc;
 Eigen::MatrixXd TTVC;
-Eigen::MatrixXd AM;
-Eigen::VectorXd T_volumes;
-Eigen::VectorXd T_av_ratio;
-Eigen::VectorXd T_in_circum_ratio;
-Eigen::VectorXd T_aspect_ratio;
-Eigen::VectorXd T_dihedral_angles;
+//Eigen::MatrixXd AM;
+//Eigen::VectorXd T_volumes;
+//Eigen::VectorXd T_av_ratio;
+//Eigen::VectorXd T_in_circum_ratio;
+//Eigen::VectorXd T_aspect_ratio;
+//Eigen::VectorXd T_dihedral_angles;
 
 // tetrahedra diplay triangles
 Eigen::MatrixXd dV;
@@ -45,14 +46,14 @@ Eigen::MatrixXi dF;
 Eigen::VectorXd dHistogram;
 
 // Delaunay
-Eigen::MatrixXd DTV;
-Eigen::MatrixXi DTT;
-Eigen::MatrixXi DTF;
-Eigen::MatrixXd DBc;
+//Eigen::MatrixXd DTV;
+//Eigen::MatrixXi DTT;
+//Eigen::MatrixXi DTF;
+//Eigen::MatrixXd DBc;
 Eigen::MatrixXd DTTVC;
-Eigen::MatrixXd DAM;
-Eigen::VectorXd DT_av_ratio;
-Eigen::VectorXd DT_volumes;
+//Eigen::MatrixXd DAM;
+//Eigen::VectorXd DT_av_ratio;
+//Eigen::VectorXd DT_volumes;
 
 // Delaunay diplay triangles
 Eigen::MatrixXd dDV;
@@ -60,71 +61,76 @@ Eigen::MatrixXi dDF;
 Eigen::VectorXd dDHistogram;
 
 // Constrained Delaunay
-Eigen::MatrixXd CDTV;
-Eigen::MatrixXi CDTT;
-Eigen::MatrixXi CDTF;
-Eigen::MatrixXd CDBc;
+//Eigen::MatrixXd CDTV;
+//Eigen::MatrixXi CDTT;
+//Eigen::MatrixXi CDTF;
+//Eigen::MatrixXd CDBc;
 Eigen::MatrixXd CDTTVC;
-Eigen::MatrixXd CDAM;
-Eigen::VectorXd CDT_av_ratio;
-Eigen::VectorXd CDT_volumes;
+//Eigen::MatrixXd CDAM;
+//Eigen::VectorXd CDT_av_ratio;
+//Eigen::VectorXd CDT_volumes;
 
 // Constrained Delaunay diplay triangles
 Eigen::MatrixXd dCDV;
 Eigen::MatrixXi dCDF;
 Eigen::VectorXd dCDHistogram;
 
-//class TetMesh {
-//private:
-//    // Data
-//    Eigen::MatrixXd TV;
-//    Eigen::MatrixXi TT;
-//    Eigen::MatrixXi TF;
-//    Eigen::MatrixXd C;
-//    Eigen::MatrixXd AM;
-//    Eigen::VectorXd volumes;
-//    Eigen::VectorXd av_ratio;
-//    Eigen::VectorXd in_circum_ratio;
-//    Eigen::VectorXd aspect_ratio;
-//    Eigen::VectorXd dihedral_angles;
-//public:
-//};
-//
-//TetMesh::TetMesh(Eigen::MatrixXd V, Eigen::MatrixXi F) {
-//    using namespace std;
-//
-//    igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
-//    adjacency(TT, TV, AM);
-//    compute_volumes(TT,TV, T_volumes);
-//    area_volume_ratio(TT, TV,T_volumes, T_av_ratio);
-//    insphere_to_circumsphere(TT, TV, T_volumes, T_in_circum_ratio);
-//    aspect_ratio(TT, TV, T_volumes, T_aspect_ratio);
-//    dihedral_angles(TT, TV, T_dihedral_angles);
-//
-//    cout << "Vertices: " << TV.rows() << endl;
-//    cout << "Faces: " << TF.rows() << endl;
-//    cout << "Tets: " << TT.rows() << endl;
-//    cout << "Tets max: " << TT.maxCoeff() << endl;
-//
-//    // Compute barycenters
-//    igl::barycenter(TV,TT,Bc);
-//}
+class TetMesh {
+private:
+    void points_changed();
 
-// matcap texture
-Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> R,G,B,A;
-
-enum Display {
-  DISPLAY_INPUT,
-  DISPLAY_TETGEN,
-  DISPLAY_DELAUNAY,
-  DISPLAY_CONSTRAINED_DELAUNAY,
+    static void adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::MatrixXd &AM);
+    static void compute_aspect_ratios(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
+    static void compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
+    static void area_volume_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
+    static void insphere_to_circumsphere(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
+    static void compute_dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
+    static void count_neighbors(const Eigen::MatrixXi& AM, Eigen::VectorXi &out);
+public:
+    // Data
+    Eigen::MatrixXd TV;
+    Eigen::MatrixXi TT;
+    Eigen::MatrixXi TF;
+    Eigen::MatrixXd C;
+    Eigen::MatrixXd AM;
+    Eigen::VectorXd volumes;
+    Eigen::VectorXd av_ratio;
+    Eigen::VectorXd in_circum_ratio;
+    Eigen::VectorXd aspect_ratios;
+    Eigen::VectorXd dihedral_angles;
+    TetMesh(); // unitialized
+    TetMesh(Eigen::MatrixXd TV, Eigen::MatrixXi TT, Eigen::MatrixXi TF);
+    void slice(double slice_t, double ratio_t, const Eigen::VectorXd _colors, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV, Eigen::MatrixXd &C);
 };
 
-Display display = DISPLAY_INPUT;
-double slice_t = 0.5;
-double filter_t = 0.0;
+TetMesh::TetMesh() {}
 
-void adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::MatrixXd &AM){
+void TetMesh::points_changed() {
+    adjacency(TT, TV, AM);
+    compute_volumes(TT,TV, volumes);
+    area_volume_ratio(TT, TV,volumes, av_ratio);
+    insphere_to_circumsphere(TT, TV, volumes, in_circum_ratio);
+    compute_aspect_ratios(TT, TV, volumes, aspect_ratios);
+    compute_dihedral_angles(TT, TV, dihedral_angles);
+}
+
+TetMesh::TetMesh(Eigen::MatrixXd _TV, Eigen::MatrixXi _TT, Eigen::MatrixXi _TF) {
+    using namespace std;
+
+    TV = _TV;
+    TT = _TT;
+    TF = _TF;
+
+    points_changed();
+
+    cout << "Vertices: " << TV.rows() << endl;
+    cout << "Faces: " << TF.rows() << endl;
+    cout << "Tets: " << TT.rows() << endl;
+    cout << "Tets max: " << TT.maxCoeff() << endl;
+}
+
+
+void TetMesh::adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::MatrixXd &AM){
     using namespace std;
     using namespace Eigen;
 
@@ -140,7 +146,7 @@ void adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::Mat
     }
 }
 
-void count_neighbors(const Eigen::MatrixXi& AM, Eigen::VectorXi &out) {
+void TetMesh::count_neighbors(const Eigen::MatrixXi& AM, Eigen::VectorXi &out) {
     out.resize(AM.rows());
     for (unsigned i=0; i<AM.rows();++i) {
       unsigned count = 0;
@@ -155,7 +161,7 @@ void count_neighbors(const Eigen::MatrixXi& AM, Eigen::VectorXi &out) {
 
 
 // See "What is a good finite element" Jonathan Richard Shewchuk p. 61
-void compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out) {
+void TetMesh::compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out) {
     out.resize(TT.rows());
     //C.resize( dV.rows(),3);
 
@@ -183,7 +189,7 @@ void compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eige
 
 
 // See "What is a good finite element" Jonathan Richard Shewchuk p. 54
-void area_volume_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out) {
+void TetMesh::area_volume_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out) {
   // This returns 4A^2
   auto area = [&] (auto a, auto b, auto c) {
     auto yz = ((a.y()-c.y())*(b.z()-c.z()))-((b.y()-c.y())*(a.z()-c.z()));
@@ -209,7 +215,7 @@ void area_volume_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, co
   }
 }
 
-void insphere_to_circumsphere(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out) {
+void TetMesh::insphere_to_circumsphere(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out) {
     using namespace Eigen;
     using namespace std;
 
@@ -248,7 +254,7 @@ void insphere_to_circumsphere(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd&
     }
 }
 
-void aspect_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out) {
+void TetMesh::compute_aspect_ratios(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out) {
     using namespace Eigen;
     using namespace std;
 
@@ -287,7 +293,7 @@ void aspect_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const E
     }
 }
 
-void dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out) {
+void TetMesh::compute_dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out) {
     using namespace Eigen;
     using namespace std;
 
@@ -318,31 +324,101 @@ void dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eige
     }
 }
 
+void TetMesh::slice(double slice_t, double filter_t, const Eigen::VectorXd _colors, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV, Eigen::MatrixXd &C){
+  using namespace std;
+  using namespace Eigen;
 
-void create_tetrahedra() {
-    using namespace std;
+  // Compute barycenters
+  MatrixXd Bc;
+  igl::barycenter(TV,TT,Bc);
 
-    igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
-    adjacency(TT, TV, AM);
-    compute_volumes(TT,TV, T_volumes);
-    area_volume_ratio(TT, TV,T_volumes, T_av_ratio);
-    insphere_to_circumsphere(TT, TV, T_volumes, T_in_circum_ratio);
-    aspect_ratio(TT, TV, T_volumes, T_aspect_ratio);
-    dihedral_angles(TT, TV, T_dihedral_angles);
+  VectorXd v = Bc.col(2).array() - Bc.col(2).minCoeff();
+  v /= v.col(0).maxCoeff();
 
-    cout << "Vertices: " << TV.rows() << endl;
-    cout << "Faces: " << TF.rows() << endl;
-    cout << "Tets: " << TT.rows() << endl;
-    cout << "Tets max: " << TT.maxCoeff() << endl;
+  //normalize volumes
+  VectorXd color = _colors;
+  color.array() -= color.minCoeff();
+  color /= color.maxCoeff();
 
-    // Compute barycenters
-    igl::barycenter(TV,TT,Bc);
+  vector<int> sorted_i(v.size());
+  // Initialize with indices 0, 1, 2, ..., n-1
+  std::iota(sorted_i.begin(), sorted_i.end(), 0);
+
+  // Sort indices based on the values in v
+  std::sort(sorted_i.begin(), sorted_i.end(), [&v](int a, int b) {
+      return v(a) < v(b);
+  });
+
+  vector<int> tet_i;
+  for (int idx : sorted_i) {
+      if (v(idx) < slice_t && color(idx) > filter_t) {
+          tet_i.push_back(idx);
+      }
+  }
+  // make sure it's not empty
+  if (tet_i.empty()) {
+      tet_i.push_back(sorted_i[0]);
+  }
+
+  dV.resize(tet_i.size()*4,3);
+  dF.resize(tet_i.size()*4,3);
+  VectorXd dColors = VectorXd(dV.rows());
+  C.resize( dV.rows(),3);
+
+  for (unsigned i=0; i<tet_i.size();++i)
+  {
+    dV.row(i*4+0) = TV.row(TT(tet_i[i],0));
+    dV.row(i*4+1) = TV.row(TT(tet_i[i],1));
+    dV.row(i*4+2) = TV.row(TT(tet_i[i],2));
+    dV.row(i*4+3) = TV.row(TT(tet_i[i],3));
+    dF.row(i*4+0) << (i*4)+0, (i*4)+1, (i*4)+3;
+    dF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
+    dF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
+    dF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
+
+    dColors(i*4+0) = color(tet_i[i]);
+    dColors(i*4+1) = color(tet_i[i]);
+    dColors(i*4+2) = color(tet_i[i]);
+    dColors(i*4+3) = color(tet_i[i]);
+  }
+
+  igl::jet(dColors, false, C);
+
+  //for (unsigned i=0; i<tet_i.size();++i) {
+  //  const unsigned j = tet_i[i];
+  //  C.row(i*4+0) << 1.0, color(j), color(j);
+  //  C.row(i*4+1) << 1.0, color(j), color(j);
+  //  C.row(i*4+2) << 1.0, color(j), color(j);
+  //  C.row(i*4+3) << 1.0, color(j), color(j);
+  //}
 }
 
-void create_delaunay() {
+TetMesh tetrahedra;
+TetMesh delaunay;
+TetMesh constrained_delaunay;
+// matcap texture
+Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> R,G,B,A;
+
+enum Display {
+  DISPLAY_INPUT,
+  DISPLAY_TETGEN,
+  DISPLAY_DELAUNAY,
+  DISPLAY_CONSTRAINED_DELAUNAY,
+};
+
+Display display = DISPLAY_INPUT;
+double slice_t = 0.5;
+double filter_t = 0.0;
+
+void create_delaunay(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+  using namespace Eigen;
   // Create 3D Delaunay triangulation using CGAL
   Delaunay dt;
   std::vector<Point> points;
+
+  MatrixXd DTV;
+  MatrixXi DTT;
+  MatrixXi DTF;
 
   // Convert Eigen vertices to CGAL points
   for(int i = 0; i < V.rows(); i++) {
@@ -417,15 +493,17 @@ void create_delaunay() {
         face_idx++;
     }
 
-    igl::barycenter(DTV,DTT,DBc);
-    adjacency(DTT, DTV, DAM);
-    compute_volumes(DTT,DTV, DT_volumes);
-    area_volume_ratio(DTT, DTV,DT_volumes, DT_av_ratio);
+
+    delaunay = TetMesh(DTV, DTT, DTF);
 }
 
-void create_constrained_delaunay() {
+void create_constrained_delaunay(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
+    using namespace Eigen;
     // Create surface mesh from the input mesh V,F
     SurfaceMesh mesh;
+    MatrixXd CDTV;
+    MatrixXi CDTT;
+    MatrixXi CDTF;
     
     // Add vertices to the surface mesh
     std::vector<SurfaceMesh::Vertex_index> vertex_indices;
@@ -514,10 +592,7 @@ void create_constrained_delaunay() {
         face_idx++;
     }
     
-    igl::barycenter(CDTV,CDTT,CDBc);
-    adjacency(CDTT, CDTV, CDAM);
-    compute_volumes(CDTT,CDTV, CDT_volumes);
-    area_volume_ratio(CDTT, CDTV,CDT_volumes, CDT_av_ratio);
+    constrained_delaunay = TetMesh(CDTV, CDTT, CDTF);
 }
 
 void update_view(igl::opengl::glfw::Viewer& viewer)
@@ -549,79 +624,6 @@ void update_view(igl::opengl::glfw::Viewer& viewer)
   //viewer.data().use_matcap = true;
 }
 
-
-// Takes Tetrahedra from TT and TV and puts slices it and puts the vertices and faces in dF and dV. It adds colors of verts into C
-void slice_tetrahedra(const double slice_t, const double filter_t, const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, const Eigen::VectorXd &_color, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV, Eigen::MatrixXd &C)
-{
-  using namespace std;
-  using namespace Eigen;
-
-  // Compute barycenters
-  MatrixXd Bc;
-  igl::barycenter(TV,TT,Bc);
-
-  VectorXd v = Bc.col(2).array() - Bc.col(2).minCoeff();
-  v /= v.col(0).maxCoeff();
-
-  //normalize volumes
-  VectorXd color = _color;
-  color.array() -= color.minCoeff();
-  color /= color.maxCoeff();
-
-  vector<int> sorted_i(v.size());
-  // Initialize with indices 0, 1, 2, ..., n-1
-  std::iota(sorted_i.begin(), sorted_i.end(), 0);
-
-  // Sort indices based on the values in v
-  std::sort(sorted_i.begin(), sorted_i.end(), [&v](int a, int b) {
-      return v(a) < v(b);
-  });
-
-  vector<int> tet_i;
-  for (int idx : sorted_i) {
-      if (v(idx) < slice_t && color(idx) > filter_t) {
-          tet_i.push_back(idx);
-      }
-  }
-  // make sure it's not empty
-  if (tet_i.empty()) {
-      tet_i.push_back(sorted_i[0]);
-  }
-
-  dV.resize(tet_i.size()*4,3);
-  dF.resize(tet_i.size()*4,3);
-  VectorXd dColors = VectorXd(dV.rows());
-  C.resize( dV.rows(),3);
-
-  for (unsigned i=0; i<tet_i.size();++i)
-  {
-    dV.row(i*4+0) = TV.row(TT(tet_i[i],0));
-    dV.row(i*4+1) = TV.row(TT(tet_i[i],1));
-    dV.row(i*4+2) = TV.row(TT(tet_i[i],2));
-    dV.row(i*4+3) = TV.row(TT(tet_i[i],3));
-    dF.row(i*4+0) << (i*4)+0, (i*4)+1, (i*4)+3;
-    dF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
-    dF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
-    dF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
-
-    dColors(i*4+0) = color(tet_i[i]);
-    dColors(i*4+1) = color(tet_i[i]);
-    dColors(i*4+2) = color(tet_i[i]);
-    dColors(i*4+3) = color(tet_i[i]);
-  }
-
-  igl::jet(dColors, false, C);
-
-  //for (unsigned i=0; i<tet_i.size();++i) {
-  //  const unsigned j = tet_i[i];
-  //  C.row(i*4+0) << 1.0, color(j), color(j);
-  //  C.row(i*4+1) << 1.0, color(j), color(j);
-  //  C.row(i*4+2) << 1.0, color(j), color(j);
-  //  C.row(i*4+3) << 1.0, color(j), color(j);
-  //}
-}
-
-
 void smooth_tetrahedra(const double t, const Eigen::MatrixXi& TT,  Eigen::MatrixXd& TV, const Eigen::MatrixXd &AM, Eigen::VectorXd volumes, Eigen::VectorXd av_ratio) {
     using namespace std;
     using namespace Eigen;
@@ -650,8 +652,8 @@ void smooth_tetrahedra(const double t, const Eigen::MatrixXi& TT,  Eigen::Matrix
     }
 
     TV = result;
-    compute_volumes(TT, TV, volumes);
-    area_volume_ratio(TT, TV, volumes, av_ratio);
+    //compute_volumes(TT, TV, volumes);
+    //area_volume_ratio(TT, TV, volumes, av_ratio);
 }
 
 
@@ -660,9 +662,9 @@ void display_delaunay(igl::opengl::glfw::Viewer& viewer)
   using namespace std;
   using namespace Eigen;
 
-  slice_tetrahedra(slice_t, filter_t, DTT, DTV, DT_volumes, DT_av_ratio, dDF, dDV, DTTVC);
+  delaunay.slice(slice_t, filter_t, delaunay.av_ratio, dDF, dDV, DTTVC);
 
-  igl::sort(DT_av_ratio, 1, true, dDHistogram);
+  igl::sort(delaunay.av_ratio, 1, true, dDHistogram);
 
   update_view(viewer);
 }
@@ -672,7 +674,7 @@ void display_constrained_delaunay(igl::opengl::glfw::Viewer& viewer)
   using namespace std;
   using namespace Eigen;
 
-  slice_tetrahedra(slice_t, filter_t, CDTT, CDTV, CDT_volumes, CDT_av_ratio, dCDF, dCDV, CDTTVC);
+  constrained_delaunay.slice(slice_t, filter_t, constrained_delaunay.av_ratio, dCDF, dCDV, CDTTVC);
   update_view(viewer);
 }
 
@@ -681,8 +683,8 @@ void display_tetrahedra(igl::opengl::glfw::Viewer& viewer)
   using namespace std;
   using namespace Eigen;
 
-  slice_tetrahedra(slice_t, filter_t, TT, TV, T_volumes, T_dihedral_angles, dF, dV, TTVC);
-  igl::sort(T_in_circum_ratio, 1, true, dHistogram);
+  tetrahedra.slice(slice_t, filter_t, tetrahedra.aspect_ratios, dF, dV, TTVC);
+  igl::sort(tetrahedra.aspect_ratios, 1, true, dHistogram);
   update_view(viewer);
 }
 
@@ -762,8 +764,8 @@ void draw_menu() {
   }
 
   if(ImGui::Button("smooth")){
-      smooth_tetrahedra(0.5, TT, TV, AM, T_av_ratio, T_volumes);
-      smooth_tetrahedra(0.5, DTT, DTV, DAM, DT_av_ratio, T_volumes);
+      //smooth_tetrahedra(0.5, TT, TV, AM, T_av_ratio, T_volumes);
+      //smooth_tetrahedra(0.5, DTT, DTV, DAM, DT_av_ratio, T_volumes);
       display_tetrahedra(viewer);
       display_delaunay(viewer);
   }
@@ -791,18 +793,23 @@ const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
 int main(int argc, char *argv[])
 {
   using namespace std;
+  using namespace Eigen;
   if(!igl::readOBJ(mesh, V, F)){
     std::cout << "Failed to load obj\n";
   }
 
   // Tetrahedralize the interior
-  create_tetrahedra();
+  MatrixXd TV;
+  MatrixXi TT;
+  MatrixXi TF;
+  igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
+  tetrahedra = TetMesh(TV, TT, TF);
 
   // Create delaunay using cgal
-  create_delaunay();
+  create_delaunay(V, F);
   
   // Create constrained delaunay using cgal
-  create_constrained_delaunay();
+  create_constrained_delaunay(V, F);
 
   // Add matcap
   igl::stb::read_image("../../libigl/matcap/ceramic_dark.png", R,G,B,A); 
