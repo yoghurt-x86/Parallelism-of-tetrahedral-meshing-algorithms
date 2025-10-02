@@ -1,0 +1,36 @@
+#pragma once
+
+#include <Eigen/Dense>
+#include <vector>
+
+class TetMesh {
+private:
+    void points_changed();
+
+    static void adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::MatrixXi &AM);
+    static void compute_aspect_ratios(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
+    static void compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
+    static void area_volume_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
+    static void insphere_to_circumsphere(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
+    static void compute_dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
+    static void count_neighbors(const Eigen::MatrixXi TT, const Eigen::MatrixXi& AM, Eigen::VectorXd &out);
+    static void compute_is_delaunay(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::MatrixXi &AM, Eigen::VectorXd &out);
+public:
+    // Data
+    Eigen::MatrixXd TV;
+    Eigen::MatrixXi TT;
+    Eigen::MatrixXi TF;
+    Eigen::MatrixXi AM;
+    Eigen::VectorXd volumes;
+    Eigen::VectorXd av_ratio;
+    Eigen::VectorXd in_circum_ratio;
+    Eigen::VectorXd aspect_ratios;
+    Eigen::VectorXd dihedral_angles;
+    Eigen::VectorXd max_vertex_neigbors;
+    Eigen::VectorXd is_delaunay;
+
+    TetMesh();
+    TetMesh(const Eigen::MatrixXd& TV, const Eigen::MatrixXi& TT, const Eigen::MatrixXi& TF);
+    void slice(double slice_t, double ratio_t, const Eigen::VectorXd _colors, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV, Eigen::MatrixXd &C);
+    void smooth(const double t);
+};

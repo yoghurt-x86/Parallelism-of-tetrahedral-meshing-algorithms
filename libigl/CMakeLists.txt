@@ -41,7 +41,18 @@ find_package(CGAL REQUIRED)
 
 # Add your project files
 file(GLOB SRC_FILES *.cpp)
-add_executable(${PROJECT_NAME} ${SRC_FILES})
+file(GLOB MODULE_FILES *.cppm)
+add_executable(${PROJECT_NAME} ${SRC_FILES} ${MODULE_FILES})
+
+# Enable modules for GCC
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fmodules-ts)
+endif()
+
+# Enable modules for Clang
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fmodules)
+endif()
 
 # Link igl (and the glfw module) to your project
 target_link_libraries(${PROJECT_NAME} PUBLIC 
