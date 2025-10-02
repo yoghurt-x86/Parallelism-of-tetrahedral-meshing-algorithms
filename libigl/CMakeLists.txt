@@ -39,6 +39,19 @@ set(CGAL_DIR "${cgal_SOURCE_DIR}")
 # Find CGAL package
 find_package(CGAL REQUIRED)
 
+# Find HIP for GPU acceleration
+find_package(hip QUIET)
+if(hip_FOUND)
+    message(STATUS "HIP found, enabling GPU acceleration")
+    set(HIP_ENABLED ON)
+    
+    # Add hip subdirectory
+    add_subdirectory(../hip hip_build)
+else()
+    message(STATUS "HIP not found, GPU acceleration disabled")
+    set(HIP_ENABLED OFF)
+endif()
+
 # Add your project files
 file(GLOB SRC_FILES *.cpp)
 file(GLOB MODULE_FILES *.cppm)
@@ -74,3 +87,9 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   # igl_restricted::triangle
   CGAL::CGAL
   )
+
+# Link HIP functions if available
+if(HIP_ENABLED)
+    target_link_libraries(${PROJECT_NAME} PUBLIC hip_functions)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HIP_ENABLED)
+endif()

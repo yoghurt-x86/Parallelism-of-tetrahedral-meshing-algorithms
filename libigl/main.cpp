@@ -17,6 +17,10 @@
 #include <vector>
 #include <map>
 
+#ifdef HIP_ENABLED
+#include "../hip/vertex_processor.h"
+#endif
+
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Delaunay_triangulation_3<K> Delaunay;
 typedef CGAL::Surface_mesh<K::Point_3> SurfaceMesh;
@@ -442,6 +446,50 @@ void draw_menu() {
 
     ImGui::PlotHistogram("", &getter, dHistogram.data(), dHistogram.size(), 0, NULL, dHistogram.minCoeff(), dHistogram.maxCoeff(), ImVec2(0, 80.0f));
   }
+  
+  ImGui::Separator();
+  ImGui::Text("GPU Functions");
+  
+#ifdef HIP_ENABLED
+  if(ImGui::Button("Scale Vertices (GPU)")) {
+    std::vector<float> vertices_flat;
+    for(int i = 0; i < V.rows(); i++) {
+      vertices_flat.push_back(static_cast<float>(V(i, 0)));
+      vertices_flat.push_back(static_cast<float>(V(i, 1)));
+      vertices_flat.push_back(static_cast<float>(V(i, 2)));
+    }
+    
+    VertexProcessor::processVertices(vertices_flat, V.rows(), 1.1f);
+    
+    for(int i = 0; i < V.rows(); i++) {
+      V(i, 0) = vertices_flat[i * 3];
+      V(i, 1) = vertices_flat[i * 3 + 1];
+      V(i, 2) = vertices_flat[i * 3 + 2];
+    }
+    update_view(viewer);
+  }
+  
+  if(ImGui::Button("Translate Vertices (GPU)")) {
+    std::vector<float> vertices_flat;
+    for(int i = 0; i < V.rows(); i++) {
+      vertices_flat.push_back(static_cast<float>(V(i, 0)));
+      vertices_flat.push_back(static_cast<float>(V(i, 1)));
+      vertices_flat.push_back(static_cast<float>(V(i, 2)));
+    }
+    
+    VertexProcessor::translateVertices(vertices_flat, V.rows(), 0.1f, 0.0f, 0.0f);
+    
+    for(int i = 0; i < V.rows(); i++) {
+      V(i, 0) = vertices_flat[i * 3];
+      V(i, 1) = vertices_flat[i * 3 + 1];
+      V(i, 2) = vertices_flat[i * 3 + 2];
+    }
+    update_view(viewer);
+  }
+#else
+  ImGui::Text("HIP not available - GPU functions disabled");
+#endif
+  
   ImGui::End();
 }
 
