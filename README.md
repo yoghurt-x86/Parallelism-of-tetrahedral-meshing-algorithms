@@ -3,17 +3,18 @@
 ## Standard Build (CPU only)
 ```bash
 nix develop
-cmake .
-make example
-./libigl/example
+mkdir build
+cd build
+cmake ..
+make
 ```
 
 ## GPU-Accelerated Build (with HIP)
 ```bash
 nix develop .#hip
-cmake .
-make example
-./libigl/example
+mkdir build
+cmake ..
+make 
 ```
 
 ## Features

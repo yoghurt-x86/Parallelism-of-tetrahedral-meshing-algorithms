@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
-project(hip_functions LANGUAGES CXX)
+project(hip_functions LANGUAGES CXX HIP)
 
 # Find HIP
 find_package(hip REQUIRED)
 
+# Set HIP architecture targets (fallback to common ones)
+if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
+    set(CMAKE_HIP_ARCHITECTURES "gfx906;gfx942")
+endif()
+
 # Set HIP compiler flags
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_HIP_STANDARD 17)
+set(CMAKE_HIP_STANDARD_REQUIRED ON)
 
 # Set HIP-specific compile options
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")

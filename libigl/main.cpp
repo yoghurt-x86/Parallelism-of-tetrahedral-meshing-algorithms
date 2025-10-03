@@ -4,6 +4,7 @@
 #include <igl/opengl/glfw/imgui/ImGuiMenu.h>
 #include <igl/opengl/glfw/imgui/ImGuiHelpers.h>
 #include <igl/readOBJ.h>
+#include <igl/readSTL.h>
 #include <igl/jet.h>
 #include <igl/sort.h>
 #include <igl/copyleft/tetgen/tetrahedralize.h>
@@ -14,6 +15,7 @@
 #include <igl/barycenter.h>
 #include <igl/stb/read_image.h>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <map>
 
@@ -493,16 +495,23 @@ void draw_menu() {
   ImGui::End();
 }
 
-const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
+const std::string mesh = "../../libigl/meshes/53754.stl";
+//const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
 //const std::string mesh = "../meshes/tetrahedron.obj";
 
 int main(int argc, char *argv[])
 {
   using namespace std;
   using namespace Eigen;
-  if(!igl::readOBJ(mesh, V, F)){
-    std::cout << "Failed to load obj\n";
+  //if(!igl::readOBJ(mesh, V, F)){
+  //  std::cout << "Failed to load obj\n";
+  //}
+  Eigen::MatrixXi N;
+  ifstream stl_file(mesh);
+  if(!igl::readSTL(stl_file, V, F, N)){
+    std::cout << "Failed to load stl\n";
   }
+  stl_file.close();
 
   // Tetrahedralize the interior
   MatrixXd TV;
