@@ -52,23 +52,31 @@ else()
     set(HIP_ENABLED OFF)
 endif()
 
-# Add your project files
-file(GLOB SRC_FILES *.cpp)
-file(GLOB MODULE_FILES *.cppm)
-add_executable(${PROJECT_NAME} ${SRC_FILES} ${MODULE_FILES})
+# Shared library for common functionality
+add_library(tetmesh_lib TetMesh.cpp)
+
+# Main UI application
+add_executable(${PROJECT_NAME} main.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE tetmesh_lib)
+
+# Second program (you can customize this)
+add_executable(tetmesh_processor processor_main.cpp)
+target_link_libraries(tetmesh_processor PRIVATE tetmesh_lib)
 
 # Enable modules for GCC
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(${PROJECT_NAME} PRIVATE -fmodules-ts)
+    target_compile_options(tetmesh_processor PRIVATE -fmodules-ts)
 endif()
 
 # Enable modules for Clang
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(${PROJECT_NAME} PRIVATE -fmodules)
+    target_compile_options(tetmesh_processor PRIVATE -fmodules)
 endif()
 
-# Link igl (and the glfw module) to your project
-target_link_libraries(${PROJECT_NAME} PUBLIC 
+# Link libraries to shared tetmesh_lib
+target_link_libraries(tetmesh_lib PUBLIC 
   igl::glfw
   ## Other modules you could link to
   # igl::embree
@@ -88,8 +96,27 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   CGAL::CGAL
   )
 
+# Link igl (and the glfw module) to your main UI project
+target_link_libraries(${PROJECT_NAME} PUBLIC 
+  igl::glfw
+  igl::imgui
+  igl::stb
+  igl_copyleft::tetgen
+  CGAL::CGAL
+  )
+
+# Link required libraries to processor (no UI libraries needed)
+target_link_libraries(tetmesh_processor PUBLIC 
+  igl_copyleft::tetgen
+  CGAL::CGAL
+  )
+
 # Link HIP functions if available
 if(HIP_ENABLED)
+    target_link_libraries(tetmesh_lib PUBLIC hip_functions)
+    target_compile_definitions(tetmesh_lib PRIVATE HIP_ENABLED)
     target_link_libraries(${PROJECT_NAME} PUBLIC hip_functions)
     target_compile_definitions(${PROJECT_NAME} PRIVATE HIP_ENABLED)
+    target_link_libraries(tetmesh_processor PUBLIC hip_functions)
+    target_compile_definitions(tetmesh_processor PRIVATE HIP_ENABLED)
 endif()

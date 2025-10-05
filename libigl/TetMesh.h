@@ -5,9 +5,10 @@
 
 class TetMesh {
 private:
+public:
     void points_changed();
-
     static void adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::MatrixXi &AM);
+    static void csr_from_AM(const Eigen::MatrixXi &AM, Eigen::VectorXi &prefix_sum, Eigen::VectorXi &idxs);
     static void compute_aspect_ratios(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
     static void compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
     static void area_volume_ratio(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::VectorXd &volumes, Eigen::VectorXd &out);
@@ -15,8 +16,10 @@ private:
     static void compute_dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
     static void count_neighbors(const Eigen::MatrixXi TT, const Eigen::MatrixXi& AM, Eigen::VectorXd &out);
     static void compute_is_delaunay(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::MatrixXi &AM, Eigen::VectorXd &out);
-public:
+
+    static void edge_pairs_from_TT(const Eigen::MatrixXi &TT, Eigen::MatrixXi &edges);
     // Data
+  //
     Eigen::MatrixXd TV;
     Eigen::MatrixXi TT;
     Eigen::MatrixXi TF;

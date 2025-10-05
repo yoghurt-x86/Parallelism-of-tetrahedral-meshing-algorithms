@@ -447,6 +447,29 @@ void draw_menu() {
     }
 
     ImGui::PlotHistogram("", &getter, dHistogram.data(), dHistogram.size(), 0, NULL, dHistogram.minCoeff(), dHistogram.maxCoeff(), ImVec2(0, 80.0f));
+#ifdef HIP_ENABLED
+    if(ImGui::Button("Smooth on GPU")) {
+      using namespace std;
+      using namespace Eigen;
+
+      VectorXi prefix_sum; 
+      VectorXi indexes; 
+      TetMesh::csr_from_AM(mesh->AM, prefix_sum, indexes);
+
+      MatrixXi edges; 
+      TetMesh::edge_pairs_from_TT(mesh->TT, edges);
+
+      cout << "prefix sum: " << prefix_sum << endl;
+      cout << mesh->TV << endl;
+
+      VertexProcessor::smooth_tets_naive(mesh->TV.data(), mesh->TV.rows(), edges.data(), edges.rows(), prefix_sum.data());
+
+      cout << mesh->TV << endl;
+
+      mesh->points_changed();
+      update_view(viewer);
+    }
+#endif
   }
   
   ImGui::Separator();
@@ -486,6 +509,7 @@ void draw_menu() {
       V(i, 1) = vertices_flat[i * 3 + 1];
       V(i, 2) = vertices_flat[i * 3 + 2];
     }
+
     update_view(viewer);
   }
 #else
@@ -495,23 +519,23 @@ void draw_menu() {
   ImGui::End();
 }
 
-const std::string mesh = "../../libigl/meshes/53754.stl";
+//const std::string mesh = "../../libigl/meshes/53754.stl";
 //const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
-//const std::string mesh = "../meshes/tetrahedron.obj";
+const std::string mesh = "../../libigl/meshes/tetrahedron.obj";
 
 int main(int argc, char *argv[])
 {
   using namespace std;
   using namespace Eigen;
-  //if(!igl::readOBJ(mesh, V, F)){
-  //  std::cout << "Failed to load obj\n";
-  //}
-  Eigen::MatrixXi N;
-  ifstream stl_file(mesh);
-  if(!igl::readSTL(stl_file, V, F, N)){
-    std::cout << "Failed to load stl\n";
+  if(!igl::readOBJ(mesh, V, F)){
+    std::cout << "Failed to load obj\n";
   }
-  stl_file.close();
+  //Eigen::MatrixXi N;
+  //ifstream stl_file(mesh);
+  //if(!igl::readSTL(stl_file, V, F, N)){
+  //  std::cout << "Failed to load stl\n";
+  //}
+  //stl_file.close();
 
   // Tetrahedralize the interior
   MatrixXd TV;

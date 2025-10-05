@@ -7,6 +7,7 @@
 #include <array>
 #include <igl/barycenter.h>
 #include <igl/jet.h>
+#include <igl/cumsum.h>
 
 TetMesh::TetMesh() {}
 
@@ -36,7 +37,7 @@ void TetMesh::adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, E
     using namespace std;
     using namespace Eigen;
 
-    AM.resize(TV.rows(), TV.rows());
+    AM.setZero(TV.rows(), TV.rows());
 
     for (unsigned i=0; i<TT.rows(); ++i) {
         for (unsigned j=0; j<4; j++) {
@@ -47,6 +48,71 @@ void TetMesh::adjacency(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, E
         }
     }
 }
+void TetMesh::csr_from_AM(const Eigen::MatrixXi &AM, Eigen::VectorXi &prefix_sum, Eigen::VectorXi &V) {
+    using namespace std;
+    using namespace Eigen;
+
+    auto sums = AM.rowwise().sum();
+    igl::cumsum(sums, 1, prefix_sum);
+
+    // Set the size of idxs to the number of edges
+    V.setZero((prefix_sum(prefix_sum.size()-1)) * 2); 
+  
+    auto idx = 0;
+    for(unsigned i=0; i<AM.rows(); ++i) {
+      for(unsigned j=0; j<AM.cols(); ++j) {
+	if (AM(i,j) != 0) {
+	  V(idx) = i;
+	  idx++;
+	  V(idx) = j;
+	  idx++;
+	}
+      }
+    }
+}
+
+
+void TetMesh::edge_pairs_from_TT(const Eigen::MatrixXi &TT, Eigen::MatrixXi &edges) {
+    using namespace std;
+    using namespace Eigen;
+
+    // Use set to store unique edges (automatically sorted)
+    set<pair<int, int>> edge_set;
+
+    // Extract edges from each tetrahedron
+    for (int i = 0; i < TT.rows(); ++i) {
+	//vector<int> tet = {TT(i,0), TT(i,1), TT(i,2), TT(i,3)};
+	auto tet = TT.row(i);
+
+	// Generate all 6 edges of the tetrahedron
+	for (int j = 0; j < 4; ++j) {
+	    for (int k = j + 1; k < 4; ++k) {
+		int v1 = tet(j), v2 = tet(k);
+		if (v1 > v2) swap(v1, v2); // Ensure consistent ordering
+		edge_set.insert({v1, v2});
+	    }
+	}
+    }
+
+    // Store edges as vertex pairs
+    edges.resize(edge_set.size(), 2);
+    int idx = 0;
+    for (const auto& edge : edge_set) {
+	edges(idx, 0) = edge.first;
+	edges(idx, 1) = edge.second;
+	idx++;
+    }
+
+
+    cout << "Edges: " << edges << endl;
+
+}
+
+//compressed sparse row of vertices
+//void TetMesh::csr(const Eigen::MatrixXd &V, const Eigen::MatrixXi &T, Eigen::VectorXi &prefix_sum, Eigen::VectorXi &idxs) {
+//    using namespace std;
+//    using namespace Eigen;
+//}
 
 void TetMesh::count_neighbors(const Eigen::MatrixXi TT, const Eigen::MatrixXi& AM, Eigen::VectorXd &out) {
     using namespace Eigen;
@@ -359,6 +425,7 @@ void TetMesh::slice(double slice_t, double filter_t, const Eigen::VectorXd _colo
 
   igl::jet(dColors, false, C);
 }
+
 
 void TetMesh::smooth(const double t) {
     using namespace std;
