@@ -67,20 +67,26 @@ __global__ void smooth_by_edges(double* V, int* E, int edge_count, double* V_out
     }
 }
 
-__global__ void count_by_edges(double* V, int* E, int edge_count, int* V_out) {
+__global__ void smooth_by_edges2(double* V, int* E, int *prefix_sum, int edge_count, double* V_out) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(idx < edge_count) {
-      int first  = E[(idx*2)] * 3;
-      int second = E[(idx*2)+1] * 3;
+      int first  = E[(idx*2)];
+      int second = E[(idx*2)+1];
 
-      atomicAdd(&V_out[first + 0], 1);
-      atomicAdd(&V_out[first + 1], 1);
-      atomicAdd(&V_out[first + 2], 1);
+      double sum1 = 1 / (double) (first == 0 ? prefix_sum[first] : prefix_sum[first] - prefix_sum[first-1]);
+      double sum2 = 1 / (double) (second == 0 ? prefix_sum[second] : prefix_sum[second] - prefix_sum[second-1]);
 
-      atomicAdd(&V_out[second + 0], 1);
-      atomicAdd(&V_out[second + 1], 1);
-      atomicAdd(&V_out[second + 2], 1);
+      first  *= 3;
+      second *= 3;
+
+      atomicAdd(&V_out[first + 0], V[second + 0] * (sum1));
+      atomicAdd(&V_out[first + 1], V[second + 1] * (sum1));
+      atomicAdd(&V_out[first + 2], V[second + 2] * (sum1));
+
+      atomicAdd(&V_out[second + 0], V[first + 0] * (sum2));
+      atomicAdd(&V_out[second + 1], V[first + 1] * (sum2));
+      atomicAdd(&V_out[second + 2], V[first + 2] * (sum2));
     }
 }
 
@@ -88,12 +94,10 @@ __global__ void average_by_sum(double* V, int* prefix_sum, int vert_count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(idx < vert_count) {
-      int sum = idx == 0 ? prefix_sum[0] : prefix_sum[idx] - prefix_sum[idx];
-      if (sum != 0) {
-	V[idx * 3 + 0] = V[idx * 3 + 0] / ((double) sum);
-	V[idx * 3 + 1] = V[idx * 3 + 1] / ((double) sum);
-	V[idx * 3 + 2] = V[idx * 3 + 2] / ((double) sum);
-      }
+      int sum = idx == 0 ? prefix_sum[0] : prefix_sum[idx] - prefix_sum[idx-1];
+      V[idx * 3 + 0] = V[idx * 3 + 0] / ((double) sum);
+      V[idx * 3 + 1] = V[idx * 3 + 1] / ((double) sum);
+      V[idx * 3 + 2] = V[idx * 3 + 2] / ((double) sum);
     }
 }
 
@@ -182,7 +186,6 @@ void translateVerticesFromPointer(double* vertices, int vertex_count, float dx, 
 void smooth_tets_naive(double* TV, int vertex_count, int* edge_pairs, int num_edges, int* prefix_sum) {
     double* d_V;
     double* d_V_out;
-    int* d_V_count_out;
     int* d_E;
     int* d_prefix_sum;
 
@@ -192,34 +195,35 @@ void smooth_tets_naive(double* TV, int vertex_count, int* edge_pairs, int num_ed
     
     hipMalloc(&d_V, size_verts);
     hipMalloc(&d_V_out, size_verts);
-    hipMemset(&d_V_out, 0.0, size_verts);
-    hipMalloc(&d_V_count_out, size_verts);
-    hipMemset(&d_V_count_out, 0, size_verts);
     hipMalloc(&d_E, size_edges);
     hipMalloc(&d_prefix_sum, size_prefix_sum);
 
     hipMemcpy(d_V, TV, size_verts, hipMemcpyHostToDevice);
     hipMemcpy(d_E, edge_pairs, size_edges, hipMemcpyHostToDevice);
     hipMemcpy(d_prefix_sum, prefix_sum, size_prefix_sum, hipMemcpyHostToDevice);
+    hipMemset(d_V_out, 0, size_verts);
     
     int threadsPerBlock = 256;
     int blocksPerGridEdges = (num_edges + threadsPerBlock - 1) / threadsPerBlock;
+    std::cout << blocksPerGridEdges << std::endl;
+
     int blocksPerGridVerts = (vertex_count + threadsPerBlock - 1) / threadsPerBlock;
-    
-    hipLaunchKernelGGL(smooth_by_edges, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, num_edges, d_V_out);
-    hipLaunchKernelGGL(count_by_edges, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, num_edges, d_V_count_out);
 
-    hipDeviceSynchronize();
-
-    //hipLaunchKernelGGL(average_by_sum, dim3(blocksPerGridVerts), dim3(threadsPerBlock), 0, 0, d_V, d_prefix_sum, vertex_count);
-
+    std::cout << blocksPerGridVerts << std::endl;
+    //hipLaunchKernelGGL(smooth_by_edges, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, num_edges, d_V_out);
     //hipDeviceSynchronize();
+
+    hipLaunchKernelGGL(smooth_by_edges2, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, d_prefix_sum, num_edges, d_V_out);
+    hipDeviceSynchronize();
+    
+
+    //hipLaunchKernelGGL(average_by_sum, dim3(blocksPerGridVerts), dim3(threadsPerBlock), 0, 0, d_V_out, d_prefix_sum, vertex_count);
+    //hipDeviceSynchronize();
+
     hipMemcpy(TV, d_V_out, size_verts, hipMemcpyDeviceToHost);
-    hipMemcpy(prefix_sum, d_V_count_out, size_verts, hipMemcpyDeviceToHost);
 
     hipFree(d_V);
     hipFree(d_V_out);
-    hipFree(d_V_count_out);
     hipFree(d_E);
     hipFree(d_prefix_sum);
 }

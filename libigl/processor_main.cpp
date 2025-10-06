@@ -16,8 +16,8 @@ int main(int argc, char *argv[]) {
     using namespace Eigen;
     
     //const std::string mesh_file = "../../libigl/meshes/53754.stl";
-    //const std::string mesh_file = "../../libigl/meshes/tetrahedron.obj";
-    const std::string mesh_file = "../../libigl/meshes/spot_triangulated.obj";
+    const std::string mesh_file = "../../libigl/meshes/tetrahedron.obj";
+    //const std::string mesh_file = "../../libigl/meshes/spot_triangulated.obj";
     
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
@@ -70,11 +70,21 @@ int main(int argc, char *argv[]) {
     MatrixXi edges; 
     TetMesh::edge_pairs_from_TT(TT, edges);
 
+
+    MatrixXd TV_gpu = TV.transpose();
+    MatrixXi TT_gpu = TT.transpose();
+    MatrixXi edges_gpu = edges.transpose(); 
+    VectorXi prefix_sum_gpu = prefix_sum; 
+
+
+    std::cout << "V" << TV << std::endl;
 #ifdef HIP_ENABLED
-    VertexProcessor::smooth_tets_naive(V.data(), V.rows(), edges.data(), edges.rows(), prefix_sum.data());
+    VertexProcessor::smooth_tets_naive(TV_gpu.data(), V.rows(), edges_gpu.data(), edges.rows(), prefix_sum_gpu.data());
 #endif
 
-    std::cout << "edges" << edges.size() << std::endl;
+    TV.noalias() = TV_gpu.transpose();
+    edges.noalias() = edges_gpu.transpose();
+    prefix_sum.noalias() = prefix_sum_gpu;
 
     std::cout << "V" << TV << std::endl;
     std::cout << "edges:" << edges << std::endl;

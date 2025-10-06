@@ -459,12 +459,21 @@ void draw_menu() {
       MatrixXi edges; 
       TetMesh::edge_pairs_from_TT(mesh->TT, edges);
 
-      cout << "prefix sum: " << prefix_sum << endl;
-      cout << mesh->TV << endl;
+      MatrixXd TV_gpu = mesh->TV.transpose(); 
+      MatrixXi edges_gpu = edges.transpose(); 
+      VectorXi prefix_sum_gpu = prefix_sum.transpose(); 
 
-      VertexProcessor::smooth_tets_naive(mesh->TV.data(), mesh->TV.rows(), edges.data(), edges.rows(), prefix_sum.data());
+      //std::cout << "V" << mesh->TV << std::endl;
+      //std::cout << "edges:" << edges << std::endl;
+      //std::cout << "sum:" << prefix_sum << std::endl;
 
-      cout << mesh->TV << endl;
+      VertexProcessor::smooth_tets_naive(TV_gpu.data(), mesh->TV.rows(), edges_gpu.data(), edges.rows(), prefix_sum_gpu.data());
+
+      mesh->TV.noalias() = TV_gpu.transpose();
+
+      //std::cout << "V" << mesh->TV << std::endl;
+      //std::cout << "edges:" << edges << std::endl;
+      //std::cout << "sum:" << prefix_sum << std::endl;
 
       mesh->points_changed();
       update_view(viewer);
@@ -520,8 +529,8 @@ void draw_menu() {
 }
 
 //const std::string mesh = "../../libigl/meshes/53754.stl";
-//const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
-const std::string mesh = "../../libigl/meshes/tetrahedron.obj";
+const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
+//const std::string mesh = "../../libigl/meshes/tetrahedron.obj";
 
 int main(int argc, char *argv[])
 {

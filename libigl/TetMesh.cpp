@@ -102,10 +102,6 @@ void TetMesh::edge_pairs_from_TT(const Eigen::MatrixXi &TT, Eigen::MatrixXi &edg
 	edges(idx, 1) = edge.second;
 	idx++;
     }
-
-
-    cout << "Edges: " << edges << endl;
-
 }
 
 //compressed sparse row of vertices
