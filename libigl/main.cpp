@@ -7,6 +7,7 @@
 #include <igl/readSTL.h>
 #include <igl/jet.h>
 #include <igl/sort.h>
+#include <igl/histc.h>
 #include <igl/copyleft/tetgen/tetrahedralize.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_3.h>
@@ -306,7 +307,19 @@ void update_view(igl::opengl::glfw::Viewer& viewer)
     mesh->slice(slice_t, filter_t, colors, dF, dV, dC);
     viewer.data().set_mesh(dV, dF);
     viewer.data().set_colors(dC);
-    igl::sort(colors, 1, true, dHistogram);
+
+
+    int num_bins = 255;
+    double min_val = colors.minCoeff();
+    double max_val = colors.maxCoeff();
+    double bin_width = (max_val - min_val) / num_bins;
+    Eigen::VectorXi counts;
+    Eigen::VectorXi bin_indices;
+    Eigen::VectorXd bin_edges = Eigen::VectorXd::LinSpaced(num_bins + 1, min_val, max_val);
+
+    igl::histc(colors, bin_edges, dHistogram, bin_indices);
+
+    //igl::sort(colors, 1, true, dHistogram);
   }
 }
 
