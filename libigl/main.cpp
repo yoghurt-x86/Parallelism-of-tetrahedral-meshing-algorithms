@@ -8,6 +8,7 @@
 #include <igl/jet.h>
 #include <igl/sort.h>
 #include <igl/histc.h>
+#include <igl/boundary_facets.h>
 #include <igl/copyleft/tetgen/tetrahedralize.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_3.h>
@@ -61,6 +62,7 @@ enum ColorMap {
   COLORMAP_dihedral_angles,
   COLORMAP_neighbors,
   COLORMAP_delaunay,
+  COLORMAP_boundary,
 };
 
 Display display = DISPLAY_INPUT;
@@ -278,7 +280,7 @@ void update_view(igl::opengl::glfw::Viewer& viewer)
       break;
   }
 
-  Eigen::VectorXd colors;
+  static Eigen::VectorXd colors;
   switch (colorMap) {
     case COLORMAP_volumes:
       colors = mesh->volumes;
@@ -301,13 +303,15 @@ void update_view(igl::opengl::glfw::Viewer& viewer)
     case COLORMAP_delaunay:
       colors = mesh->is_delaunay;
       break;
+    case COLORMAP_boundary:
+      colors = mesh->boundary_flag_d;
+      break;
   }
 
   if(display != DISPLAY_INPUT){
     mesh->slice(slice_t, filter_t, colors, dF, dV, dC);
     viewer.data().set_mesh(dV, dF);
     viewer.data().set_colors(dC);
-
 
     int num_bins = 255;
     double min_val = colors.minCoeff();
@@ -451,6 +455,10 @@ void draw_menu() {
       colorMap = COLORMAP_neighbors;
       update_view(viewer);
     }
+    if(ImGui::RadioButton("Mark boundary", &e, 7)){
+      colorMap = COLORMAP_boundary;
+      update_view(viewer);
+    }
 
     if(ImGui::SliderScalar("Slice ratio", ImGuiDataType_Double, &slice_t, &p_min, &p_max, "ratio = %.3f")) { 
       update_view(viewer);
@@ -542,8 +550,9 @@ void draw_menu() {
 }
 
 //const std::string mesh = "../../libigl/meshes/53754.stl";
-const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
+//const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
 //const std::string mesh = "../../libigl/meshes/tetrahedron.obj";
+const std::string mesh = "../../libigl/meshes/cube.obj";
 
 int main(int argc, char *argv[])
 {
@@ -564,11 +573,38 @@ int main(int argc, char *argv[])
   MatrixXi TT;
   MatrixXi TF;
 
+  Eigen::VectorXi VM,FM;
+  Eigen::MatrixXd H,Reg;
+  Eigen::VectorXi TM,TR,PT;
+  Eigen::MatrixXi FT,TN;
+  int numRegions;
 
-  igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
-  igl::copyleft::tetgen::tetrahedralize(V,F,"pq1.414Y", TV,TT,TF);
+  //igl::copyleft::tetgen::tetrahedralize(V,F, H, VM, FM, Reg, "pq1.414a0.1n", TV,TT,TF,TM, TR, TN, PT, FT, numRegions );
+  igl::copyleft::tetgen::tetrahedralize(V,F, H, VM, FM, Reg, "pq1.414n", TV,TT,TF,TM, TR, TN, PT, FT, numRegions );
 
+  cout << "H:"  << endl << H << endl << endl;
+  cout << "PT:"  << endl << PT << endl << endl;
+  cout << "FT:"  << endl << FT << endl << endl;
+  cout << "TR:"  << endl << TR << endl << endl;
+  cout << "TN:"  << endl << TN << endl << endl;
+  cout << "TM:"  << endl << TM << endl << endl;
+  cout << "TF:"  << endl << TF.rows() << endl << endl;
+  cout << "TT:"  << endl << TT << endl << endl;
+
+  Eigen::MatrixXi BF;
+  Eigen::VectorXi BJ,BK;
   tetrahedra = TetMesh(TV, TT, TF);
+
+  Eigen::VectorXi offset, indexes;
+  TetMesh::vertex_to_TT_map(tetrahedra.TT, tetrahedra.TV, offset, indexes);
+
+
+  cout << "offset:"  << endl << offset << endl << endl;
+  cout << "indexes:"  << endl << indexes << "   (" << TT.size() << " - " << indexes.size() << ")" << endl << endl;
+
+  tetrahedra.connectivity(2, offset, indexes);
+
+  cout << "TT:"  << endl << tetrahedra.TT << endl << endl;
 
   // Create delaunay using cgal
   create_delaunay(V, F);

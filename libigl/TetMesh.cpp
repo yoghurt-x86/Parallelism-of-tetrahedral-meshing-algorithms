@@ -20,6 +20,8 @@ void TetMesh::points_changed() {
     compute_dihedral_angles(TT, TV, dihedral_angles);
     count_neighbors(TT, AM, max_vertex_neigbors);
     compute_is_delaunay(TT, TV, AM, is_delaunay);
+    compute_boundary_flags(TV, TF, boundary_flag);
+    compute_boundary_flags(TV, TF, boundary_flag);
 }
 
 TetMesh::TetMesh(const Eigen::MatrixXd& _TV, const Eigen::MatrixXi& _TT, const Eigen::MatrixXi& _TF) {
@@ -104,6 +106,47 @@ void TetMesh::edge_pairs_from_TT(const Eigen::MatrixXi &TT, Eigen::MatrixXi &edg
     }
 }
 
+void TetMesh::vertex_to_TT_map(const Eigen::MatrixXi &TT, const Eigen::MatrixXd &TV, Eigen::VectorXi &offset_out, Eigen::VectorXi &tet_index_out) {
+    using namespace std;
+    using namespace Eigen;
+
+    VectorXi sums;
+    sums.setZero(TV.rows());
+
+    for (unsigned i=0; i < TT.rows(); ++i) {
+      sums(TT(i,0))++; 
+      sums(TT(i,1))++; 
+      sums(TT(i,2))++; 
+      sums(TT(i,3))++; 
+    }
+
+    VectorXi prefix_sum_inclusive;
+    igl::cumsum(sums, 1, prefix_sum_inclusive);
+    unsigned total = prefix_sum_inclusive(prefix_sum_inclusive.size()-1);
+
+    //cout << "prfx sum\n" << prefix_sum_inclusive << endl << endl;
+
+    VectorXi prefix_sum(sums.size());
+    prefix_sum << 0, prefix_sum_inclusive.head(sums.size() - 1);
+
+    //cout << prefix_sum << endl;
+    offset_out = prefix_sum;
+
+    tet_index_out.resize(total);
+    assert(tet_index_out.size() == TT.rows() * 4);
+
+    //cout << "size " << tet_index_out.size() << endl;
+
+    for (unsigned i=0; i < TT.rows(); ++i) {
+      tet_index_out(prefix_sum(TT(i, 0))++) = i;
+      tet_index_out(prefix_sum(TT(i, 1))++) = i;
+      tet_index_out(prefix_sum(TT(i, 2))++) = i;
+      tet_index_out(prefix_sum(TT(i, 3))++) = i;
+    }
+    //cout << "huuuuh " << prefix_sum << endl;
+
+}
+
 //compressed sparse row of vertices
 //void TetMesh::csr(const Eigen::MatrixXd &V, const Eigen::MatrixXi &T, Eigen::VectorXi &prefix_sum, Eigen::VectorXi &idxs) {
 //    using namespace std;
@@ -169,6 +212,27 @@ void TetMesh::compute_volumes(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd&
     }
 }
 
+void TetMesh::compute_boundary_flags(const Eigen::MatrixXd &TV, const Eigen::MatrixXi &TF, Eigen::VectorXi &out) {
+  out.setZero(TV.rows());
+
+  for(unsigned i = 0; i<TF.rows(); ++i){
+    out(TF(i,0)) = 1;
+    out(TF(i,1)) = 1;
+    out(TF(i,2)) = 1;
+  }
+
+}
+
+void TetMesh::compute_boundary_flags(const Eigen::MatrixXd &TV, const Eigen::MatrixXi &TF, Eigen::VectorXd &out) {
+  out.setZero(TV.rows());
+
+  for(unsigned i = 0; i<TF.rows(); ++i){
+    out(TF(i,0)) = 1.0;
+    out(TF(i,1)) = 1.0;
+    out(TF(i,2)) = 1.0;
+  }
+
+}
 
 void TetMesh::compute_is_delaunay(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::MatrixXi &AM, Eigen::VectorXd &out) {
     using namespace Eigen;
@@ -387,10 +451,19 @@ void TetMesh::slice(double slice_t, double filter_t, const Eigen::VectorXd _colo
   });
 
   vector<int> tet_i;
-  for (int idx : sorted_i) {
-      if (v(idx) < slice_t && color(idx) > filter_t) {
-          tet_i.push_back(idx);
-      }
+
+  if(color.size() == TT.rows()) {
+    for (int idx : sorted_i) {
+	if (v(idx) < slice_t && color(idx) > filter_t) {
+	    tet_i.push_back(idx);
+	}
+    }
+  } else {
+    for (int idx : sorted_i) {
+	if (v(idx) < slice_t) {
+	    tet_i.push_back(idx);
+	}
+    }
   }
   // make sure it's not empty
   if (tet_i.empty()) {
@@ -412,11 +485,24 @@ void TetMesh::slice(double slice_t, double filter_t, const Eigen::VectorXd _colo
     dF.row(i*4+1) << (i*4)+0, (i*4)+2, (i*4)+1;
     dF.row(i*4+2) << (i*4)+3, (i*4)+2, (i*4)+0;
     dF.row(i*4+3) << (i*4)+1, (i*4)+2, (i*4)+3;
+  }
 
-    dColors(i*4+0) = color(tet_i[i]);
-    dColors(i*4+1) = color(tet_i[i]);
-    dColors(i*4+2) = color(tet_i[i]);
-    dColors(i*4+3) = color(tet_i[i]);
+  if(color.size() == TT.rows()) {
+    for (unsigned i=0; i<tet_i.size();++i)
+    {
+      dColors(i*4+0) = color(tet_i[i]);
+      dColors(i*4+1) = color(tet_i[i]);
+      dColors(i*4+2) = color(tet_i[i]);
+      dColors(i*4+3) = color(tet_i[i]);
+    }
+  } else {
+    for (unsigned i=0; i<tet_i.size();++i)
+    {
+      dColors(i*4+0) = color(TT(tet_i[i],0));
+      dColors(i*4+1) = color(TT(tet_i[i],1));
+      dColors(i*4+2) = color(TT(tet_i[i],2));
+      dColors(i*4+3) = color(TT(tet_i[i],3));
+    }
   }
 
   igl::jet(dColors, false, C);
@@ -431,6 +517,7 @@ void TetMesh::smooth(const double t) {
 
     for (unsigned k=0; k<25;++k){
 	for (unsigned i=0; i<result.rows(); ++i) {
+	    if (boundary_flag(i) == 1) continue;
 
 	    Vector3d p(0.0,0.0,0.0); 
 	    unsigned count = 0;
@@ -457,6 +544,25 @@ void TetMesh::smooth(const double t) {
     }
 
     TV = result;
+
+    this->points_changed();
+}
+
+void TetMesh::connectivity(const unsigned int idx, Eigen::VectorXi TV_to_TT_offsets, Eigen::VectorXi TV_to_TT) {
+    using namespace std;
+    using namespace Eigen;
+
+    unsigned max_index = idx+1 < TV_to_TT_offsets.size() ? TV_to_TT_offsets(idx+1): TV_to_TT.size();
+
+    cout << "i: " << TV_to_TT_offsets(idx) << endl;
+    cout << "max: " << max_index << endl;
+    for(unsigned i = TV_to_TT_offsets(idx); i < max_index; ++i) {
+      TT(TV_to_TT(i), 0) = 5;
+      TT(TV_to_TT(i), 1) = 7;
+      TT(TV_to_TT(i), 2) = 4;
+      TT(TV_to_TT(i), 3) = 8;
+    }
+    cout << "haha" << endl;
 
     this->points_changed();
 }

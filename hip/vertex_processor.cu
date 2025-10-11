@@ -50,24 +50,7 @@ __global__ void translateVerticesKernelDouble(double* vertices, int vertex_count
     }
 }
 
-__global__ void smooth_by_edges(double* V, int* E, int edge_count, double* V_out) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(idx < edge_count) {
-      int first  = E[(idx*2)] * 3;
-      int second = E[(idx*2)+1] * 3;
-
-      atomicAdd(&V_out[first + 0], V[second + 0]);
-      atomicAdd(&V_out[first + 1], V[second + 1]);
-      atomicAdd(&V_out[first + 2], V[second + 2]);
-
-      atomicAdd(&V_out[second + 0], V[first + 0]);
-      atomicAdd(&V_out[second + 1], V[first + 1]);
-      atomicAdd(&V_out[second + 2], V[first + 2]);
-    }
-}
-
-__global__ void smooth_by_edges2(double* V, int* E, int *prefix_sum, int edge_count, double* V_out) {
+__global__ void smooth_by_edges(double* V, int* E, int *prefix_sum, int edge_count, double* V_out) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(idx < edge_count) {
@@ -87,17 +70,6 @@ __global__ void smooth_by_edges2(double* V, int* E, int *prefix_sum, int edge_co
       atomicAdd(&V_out[second + 0], V[first + 0] * (sum2));
       atomicAdd(&V_out[second + 1], V[first + 1] * (sum2));
       atomicAdd(&V_out[second + 2], V[first + 2] * (sum2));
-    }
-}
-
-__global__ void average_by_sum(double* V, int* prefix_sum, int vert_count) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(idx < vert_count) {
-      int sum = idx == 0 ? prefix_sum[0] : prefix_sum[idx] - prefix_sum[idx-1];
-      V[idx * 3 + 0] = V[idx * 3 + 0] / ((double) sum);
-      V[idx * 3 + 1] = V[idx * 3 + 1] / ((double) sum);
-      V[idx * 3 + 2] = V[idx * 3 + 2] / ((double) sum);
     }
 }
 
@@ -205,20 +177,9 @@ void smooth_tets_naive(double* TV, int vertex_count, int* edge_pairs, int num_ed
     
     int threadsPerBlock = 256;
     int blocksPerGridEdges = (num_edges + threadsPerBlock - 1) / threadsPerBlock;
-    std::cout << blocksPerGridEdges << std::endl;
 
-    int blocksPerGridVerts = (vertex_count + threadsPerBlock - 1) / threadsPerBlock;
-
-    std::cout << blocksPerGridVerts << std::endl;
-    //hipLaunchKernelGGL(smooth_by_edges, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, num_edges, d_V_out);
-    //hipDeviceSynchronize();
-
-    hipLaunchKernelGGL(smooth_by_edges2, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, d_prefix_sum, num_edges, d_V_out);
+    hipLaunchKernelGGL(smooth_by_edges, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0, d_V, d_E, d_prefix_sum, num_edges, d_V_out);
     hipDeviceSynchronize();
-    
-
-    //hipLaunchKernelGGL(average_by_sum, dim3(blocksPerGridVerts), dim3(threadsPerBlock), 0, 0, d_V_out, d_prefix_sum, vertex_count);
-    //hipDeviceSynchronize();
 
     hipMemcpy(TV, d_V_out, size_verts, hipMemcpyDeviceToHost);
 

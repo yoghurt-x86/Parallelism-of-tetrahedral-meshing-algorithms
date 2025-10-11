@@ -16,8 +16,10 @@ public:
     static void compute_dihedral_angles(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, Eigen::VectorXd &out);
     static void count_neighbors(const Eigen::MatrixXi TT, const Eigen::MatrixXi& AM, Eigen::VectorXd &out);
     static void compute_is_delaunay(const Eigen::MatrixXi& TT,  const Eigen::MatrixXd& TV, const Eigen::MatrixXi &AM, Eigen::VectorXd &out);
-
     static void edge_pairs_from_TT(const Eigen::MatrixXi &TT, Eigen::MatrixXi &edges);
+    static void compute_boundary_flags(const Eigen::MatrixXd &TV, const Eigen::MatrixXi &TF, Eigen::VectorXi &out);
+    static void compute_boundary_flags(const Eigen::MatrixXd &TV, const Eigen::MatrixXi &TF, Eigen::VectorXd &out);
+    static void vertex_to_TT_map(const Eigen::MatrixXi &TT, const Eigen::MatrixXd &TV, Eigen::VectorXi &offset_out, Eigen::VectorXi &tet_index_out);
     // Data
   //
     Eigen::MatrixXd TV;
@@ -31,9 +33,12 @@ public:
     Eigen::VectorXd dihedral_angles;
     Eigen::VectorXd max_vertex_neigbors;
     Eigen::VectorXd is_delaunay;
+    Eigen::VectorXi boundary_flag;
+    Eigen::VectorXd boundary_flag_d;
 
     TetMesh();
     TetMesh(const Eigen::MatrixXd& TV, const Eigen::MatrixXi& TT, const Eigen::MatrixXi& TF);
     void slice(double slice_t, double ratio_t, const Eigen::VectorXd _colors, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV, Eigen::MatrixXd &C);
     void smooth(const double t);
+    void connectivity(const unsigned int i, Eigen::VectorXi offsets, Eigen::VectorXi TV_to_TT);
 };
