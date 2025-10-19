@@ -45,6 +45,10 @@ if(hip_FOUND)
     message(STATUS "HIP found, enabling GPU acceleration")
     set(HIP_ENABLED ON)
     
+    # Set Eigen include directory for hip subdirectory
+    get_target_property(EIGEN_INCLUDE_DIRS Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
+    set(EIGEN_INCLUDE_DIRS ${EIGEN_INCLUDE_DIRS} PARENT_SCOPE)
+    
     # Add hip subdirectory
     add_subdirectory(../hip hip_build)
 else()

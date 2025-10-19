@@ -20,6 +20,16 @@ public:
     static void compute_boundary_flags(const Eigen::MatrixXd &TV, const Eigen::MatrixXi &TF, Eigen::VectorXi &out);
     static void compute_boundary_flags(const Eigen::MatrixXd &TV, const Eigen::MatrixXi &TF, Eigen::VectorXd &out);
     static void vertex_to_TT_map(const Eigen::MatrixXi &TT, const Eigen::MatrixXd &TV, Eigen::VectorXi &offset_out, Eigen::VectorXi &tet_index_out);
+    static void flips(const Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN,
+                        Eigen::MatrixXi &two_three_flips,
+                        Eigen::MatrixXi &three_two_flips,
+                        Eigen::MatrixXi &TF23
+                        //Eigen::MatrixXi &TF32
+                        );
+    static void flip23(int i1, int i2, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
+    static void flip32(int i1, int i2, int i3, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
+    static void flip_everything(const Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
+    static void display(const Eigen::MatrixXi TT, const Eigen::MatrixXd TV, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV);
     // Data
   //
     Eigen::MatrixXd TV;

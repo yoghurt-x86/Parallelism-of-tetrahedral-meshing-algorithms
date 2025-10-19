@@ -36,6 +36,12 @@ target_link_libraries(hip_functions PUBLIC hip::host)
 # Set include directories
 target_include_directories(hip_functions PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# Add Eigen include directories if available
+if(DEFINED EIGEN_INCLUDE_DIRS)
+    target_include_directories(hip_functions PUBLIC ${EIGEN_INCLUDE_DIRS})
+    message(STATUS "Added Eigen include directories to hip_functions: ${EIGEN_INCLUDE_DIRS}")
+endif()
+
 # Set compiler for HIP files
 set_target_properties(hip_functions PROPERTIES 
     HIP_STANDARD 17
@@ -46,3 +52,8 @@ set_target_properties(hip_functions PROPERTIES
 add_executable(wa1-task3 wa1-task3-hipified.cu)
 set_source_files_properties(wa1-task3-hipified.cu PROPERTIES LANGUAGE HIP)
 target_link_libraries(wa1-task3 PUBLIC hip::host)
+
+# Add Eigen include directories to test executable if available
+if(DEFINED EIGEN_INCLUDE_DIRS)
+    target_include_directories(wa1-task3 PUBLIC ${EIGEN_INCLUDE_DIRS})
+endif()

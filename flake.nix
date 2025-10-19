@@ -91,6 +91,8 @@
               gnumake
               gcc
               pkg-config
+
+	      jetbrains.clion
             ] ++ (if system == "aarch64-darwin" then [ ] else [ gdb ]);
 
             shellHook = ''
