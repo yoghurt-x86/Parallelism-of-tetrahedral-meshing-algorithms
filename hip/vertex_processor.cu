@@ -1,7 +1,17 @@
 #include "vertex_processor.h"
 #include <hip/hip_runtime.h>
 #include <iostream>
+#include <hipcub/hipcub.hpp>
 #include <Eigen/Dense>
+
+
+__global__ void set_ones_kernel(int* data, size_t n) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) {
+        data[idx] = 1;
+    }
+}
+
 
 __global__ void scaleVerticesKernel(float* vertices, int vertex_count, float scale_factor) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -538,7 +548,14 @@ void flip_23(double* TV,      int  vertex_count,
     int* d_TT_count;
 	size_t size_tet_count = tet_count * sizeof(int);
     hipMalloc(&d_TT_count, size_tet_count);
-    hipMemset(d_TT_count, 1, size_tet_count);
+
+    // Launch it
+    int block_size = 256;
+    int grid_size = (tet_count + block_size - 1) / block_size;
+    hipLaunchKernelGGL(set_ones_kernel, grid_size, block_size, 0, 0,
+                       d_TT_count, tet_count);
+
+    hipDeviceSynchronize();
 
     hipLaunchKernelGGL(apply_flips, dim3(blocksPerGridEdges), dim3(threadsPerBlock), 0, 0,
 		d_TV, vertex_count,
@@ -548,11 +565,42 @@ void flip_23(double* TV,      int  vertex_count,
 		d_flip_quality);
     hipDeviceSynchronize();
 
+    void* d_temp_storage = nullptr;
+    size_t temp_storage_bytes = 0;
+
+    int* d_TT_sum;
+    hipMalloc(&d_TT_sum, size_tet_count);
+	hipcub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
+                                     d_TT_count, d_TT_sum, tet_count);
+    // Allocate temporary storage
+    hipMalloc(&d_temp_storage, temp_storage_bytes);
+	hipcub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes,
+                                     d_TT_count, d_TT_sum, tet_count);
+
+
+    hipDeviceSynchronize();
+
+
     hipMemcpy(flip_quality, d_flip_quality, size_flip_quality, hipMemcpyDeviceToHost);
 
     std::cout << "Qualities: " << std::endl;
 	for (int i = 0; i < flip_count; ++i) {
 		std::cout << flip_quality[i] << std::endl;
+	}
+
+    int* TT_sum;
+    TT_sum = (int *) malloc(size_tet_count);
+    hipMemcpy(TT_sum, d_TT_count, size_tet_count, hipMemcpyDeviceToHost);
+
+    std::cout << "TT_ cuiunt: " << std::endl;
+	for (int i = 0; i < tet_count; ++i) {
+		std::cout << TT_sum[i] << std::endl;
+	}
+
+    hipMemcpy(TT_sum, d_TT_sum, size_tet_count, hipMemcpyDeviceToHost);
+    std::cout << "TT: " << std::endl;
+	for (int i = 0; i < tet_count; ++i) {
+		std::cout << TT_sum[i] << std::endl;
 	}
 
     hipFree(d_flips23_candidates);

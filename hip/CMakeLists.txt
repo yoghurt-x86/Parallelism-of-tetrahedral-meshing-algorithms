@@ -4,11 +4,8 @@ project(hip_functions LANGUAGES CXX HIP)
 # Find HIP
 find_package(hip REQUIRED)
 
-# Find rocPRIM (required by hipCUB)
-find_package(rocprim REQUIRED)
-
-# Find hipCUB
-find_package(hipcub REQUIRED)
+# Note: rocPRIM and hipCUB are available via Nix but we'll link them directly
+# to avoid CMake configuration issues
 
 # Set HIP architecture targets (fallback to common ones)
 if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
@@ -36,11 +33,19 @@ add_library(hip_functions STATIC ${HIP_SOURCES})
 # Set HIP compiler for the sources
 set_source_files_properties(${HIP_SOURCES} PROPERTIES LANGUAGE HIP)
 
-# Link HIP runtime and hipCUB
-target_link_libraries(hip_functions PUBLIC hip::host hip::hipcub)
+# Link HIP runtime
+target_link_libraries(hip_functions PUBLIC hip::host)
 
 # Set include directories
 target_include_directories(hip_functions PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Add hipCUB and rocPRIM include directories if available in environment
+if(DEFINED ENV{ROCPRIM_INCLUDE_DIR})
+    target_include_directories(hip_functions PUBLIC $ENV{ROCPRIM_INCLUDE_DIR})
+endif()
+if(DEFINED ENV{HIPCUB_INCLUDE_DIR})
+    target_include_directories(hip_functions PUBLIC $ENV{HIPCUB_INCLUDE_DIR})
+endif()
 
 # Add Eigen include directories if available
 if(DEFINED EIGEN_INCLUDE_DIRS)
@@ -57,7 +62,7 @@ set_target_properties(hip_functions PROPERTIES
 # Create executable for testing (optional)
 add_executable(wa1-task3 wa1-task3-hipified.cu)
 set_source_files_properties(wa1-task3-hipified.cu PROPERTIES LANGUAGE HIP)
-target_link_libraries(wa1-task3 PUBLIC hip::host hip::hipcub)
+target_link_libraries(wa1-task3 PUBLIC hip::host)
 
 # Add Eigen include directories to test executable if available
 if(DEFINED EIGEN_INCLUDE_DIRS)

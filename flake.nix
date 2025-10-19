@@ -108,6 +108,10 @@
               export ROC_ENABLE_PRE_VEGA=1
               export PATH=${pkgs.rocmPackages.hipcc}/bin:$PATH
               
+              # hipCUB and rocPRIM include directories
+              export ROCPRIM_INCLUDE_DIR=${pkgs.rocmPackages.rocprim}/include
+              export HIPCUB_INCLUDE_DIR=${pkgs.rocmPackages.hipcub}/include
+              
               # Create temporary ROCm structure that hipcc expects
               export TMPDIR_ROCM=$(mktemp -d)
               mkdir -p $TMPDIR_ROCM/opt/rocm/{bin,lib/llvm/bin}
