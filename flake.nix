@@ -86,6 +86,8 @@
               rocmPackages.rocm-runtime
               rocmPackages.rocminfo
               rocmPackages.rocm-device-libs
+              rocmPackages.rocprim
+              rocmPackages.hipcub
 
               # Build tools
               gnumake
