@@ -17,8 +17,8 @@ int main(int argc, char *argv[]) {
     
     //const std::string mesh_file = "../../libigl/meshes/53754.stl";
     //const std::string mesh_file = "../../libigl/meshes/tetrahedron.obj";
-    //const std::string mesh_file = "../../libigl/meshes/spot_triangulated.obj";
-    const std::string mesh_file = "../../libigl/meshes/cube.obj";
+    const std::string mesh_file = "../../libigl/meshes/spot_triangulated.obj";
+    //const std::string mesh_file = "../../libigl/meshes/cube.obj";
 
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
@@ -76,23 +76,23 @@ int main(int argc, char *argv[]) {
     //std::cout << "hehe  "<< indexes.size() << std::endl;
 
     MatrixXi edges;
-    TetMesh::edge_pairs_from_TT(TT, edges);
-    Eigen::MatrixXi flips23, flips32, TF23;
-    TetMesh::flips(TT, TN, flips23, flips32, TF23);
+    //TetMesh::edge_pairs_from_TT(TT, edges);
+    //Eigen::MatrixXi flips23, flips32, TF23;
+    //TetMesh::flips(TT, TN, flips23, flips32, TF23);
 
     //TetMesh::flip32(flips32(0, 0), flips32(0, 1), flips32(0, 2), TT, TN, TV);
 
     std::cout << "TT: \n" << TT << std::endl;
     std::cout << "TN: \n" << TN << std::endl;
-    std::cout << "TF23: \n" << TF23 << std::endl;
-    std::cout << "flips: \n" << flips23 << std::endl;
+    //std::cout << "TF23: \n" << TF23 << std::endl;
+    //std::cout << "flips: \n" << flips23 << std::endl;
 
     MatrixXd TV_gpu = TV.transpose();
     MatrixXi TT_gpu = TT.transpose();
     MatrixXi TN_gpu = TN.transpose();
-    MatrixXi flips23_gpu = flips23.transpose();
-    MatrixXi flips32_gpu = flips32.transpose();
-    MatrixXi TF23_gpu = TF23.transpose();
+    //MatrixXi flips23_gpu = flips23.transpose();
+    //MatrixXi flips32_gpu = flips32.transpose();
+    //MatrixXi TF23_gpu = TF23.transpose();
 
     MatrixXi edges_gpu = edges.transpose();
     VectorXi prefix_sum_gpu = prefix_sum;
@@ -100,12 +100,10 @@ int main(int argc, char *argv[]) {
 #ifdef HIP_ENABLED
     //VertexProcessor::smooth_tets_naive(TV_gpu.data(), TV.rows(), edges_gpu.data(), edges.rows(), prefix_sum_gpu.data());
     VertexProcessor::flip_23(TV_gpu.data(), TV.rows(),
-                             TT_gpu.data(), TN_gpu.data(), TF23_gpu.data(), TT.rows(),
-                             flips23_gpu.data(), flips23.rows()
-                            );
+                             TT_gpu.data(), TN_gpu.data(), TT.rows());
 #endif
 
-    flips23.noalias() = flips23_gpu.transpose();
+    //flips23.noalias() = flips23_gpu.transpose();
     //TV.noalias() = TV_gpu.transpose();
     //edges.noalias() = edges_gpu.transpose();
     //prefix_sum.noalias() = prefix_sum_gpu;
@@ -114,7 +112,7 @@ int main(int argc, char *argv[]) {
     //std::cout << "edges:" << edges << std::endl;
     //std::cout << "sum:" << prefix_sum << std::endl;
 
-    std::cout << "flips: \n" << flips23 << std::endl;
+    //std::cout << "flips: \n" << flips23 << std::endl;
 
     return 0;
 }
