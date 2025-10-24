@@ -24,8 +24,8 @@ public:
                         Eigen::MatrixXi &two_three_flips,
                         Eigen::MatrixXi &three_two_flips,
                         Eigen::MatrixXi &TF23
-                        //Eigen::MatrixXi &TF32
                         );
+    static void normalize_mesh(const Eigen::MatrixXd& V, Eigen::MatrixXd& V_out);
     static void flip23(int i1, int i2, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
     static void flip32(int i1, int i2, int i3, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
     static void flip_everything(const Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);

@@ -36,6 +36,20 @@ TetMesh::TetMesh(const Eigen::MatrixXd &_TV, const Eigen::MatrixXi &_TT, const E
     points_changed();
 }
 
+void TetMesh::normalize_mesh(const Eigen::MatrixXd& V,
+                    Eigen::MatrixXd& V_out){
+    using namespace Eigen;
+    Vector3d bbox_min = V.colwise().minCoeff();
+    Vector3d bbox_max = V.colwise().maxCoeff();
+
+    // Compute center and scale
+    Vector3d center_out = (bbox_min + bbox_max) / 2.0;
+    double scale_out = (bbox_max - bbox_min).maxCoeff();
+
+    // Normalize
+    V_out = (V.rowwise() - center_out.transpose()) / scale_out;
+}
+
 void TetMesh::adjacency(const Eigen::MatrixXi &TT, const Eigen::MatrixXd &TV, Eigen::MatrixXi &AM) {
     using namespace std;
     using namespace Eigen;

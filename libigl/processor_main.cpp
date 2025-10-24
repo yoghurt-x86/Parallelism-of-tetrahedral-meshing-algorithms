@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
     //std::cout << "sum val " << prefix_sum(prefix_sum.size()-1) << std::endl;
     //std::cout << "hehe  "<< indexes.size() << std::endl;
 
-    MatrixXi edges;
+    //MatrixXi edges;
     //TetMesh::edge_pairs_from_TT(TT, edges);
     //Eigen::MatrixXi flips23, flips32, TF23;
     //TetMesh::flips(TT, TN, flips23, flips32, TF23);
@@ -90,18 +90,29 @@ int main(int argc, char *argv[]) {
     MatrixXd TV_gpu = TV.transpose();
     MatrixXi TT_gpu = TT.transpose();
     MatrixXi TN_gpu = TN.transpose();
+
+    MatrixXi TT_out_gpu(4, TT.rows()*3);
+    MatrixXi TN_out_gpu(4, TN.rows()*3);
     //MatrixXi flips23_gpu = flips23.transpose();
     //MatrixXi flips32_gpu = flips32.transpose();
     //MatrixXi TF23_gpu = TF23.transpose();
 
-    MatrixXi edges_gpu = edges.transpose();
-    VectorXi prefix_sum_gpu = prefix_sum;
+    //MatrixXi edges_gpu = edges.transpose();
+    //VectorXi prefix_sum_gpu = prefix_sum;
 
 #ifdef HIP_ENABLED
     //VertexProcessor::smooth_tets_naive(TV_gpu.data(), TV.rows(), edges_gpu.data(), edges.rows(), prefix_sum_gpu.data());
     VertexProcessor::flip_23(TV_gpu.data(), TV.rows(),
-                             TT_gpu.data(), TN_gpu.data(), TT.rows());
+                             TT_gpu.data(), TN_gpu.data(), TT.rows(),
+                             TT_out_gpu.data(), TN_out_gpu.data()
+                             );
 #endif
+
+    MatrixXi TT_out;
+    MatrixXi TN_out;
+
+    TT_out.noalias() = TT_out_gpu.transpose();
+    TN_out.noalias() = TN_out_gpu.transpose();
 
     //flips23.noalias() = flips23_gpu.transpose();
     //TV.noalias() = TV_gpu.transpose();

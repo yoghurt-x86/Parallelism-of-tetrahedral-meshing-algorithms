@@ -184,7 +184,7 @@ void create_constrained_delaunay(const Eigen::MatrixXd &V, const Eigen::MatrixXi
         mesh.add_face(face_vertices);
     }
 
-    // Create constrained Delaunay triangulation
+    // Create constrained Delaunay triangulatio,
     auto cdt = CGAL::make_conforming_constrained_Delaunay_triangulation_3(mesh);
 
     // Get the underlying triangulation
@@ -555,22 +555,31 @@ void draw_menu() {
 }
 
 //const std::string mesh = "../../libigl/meshes/53754.stl";
+//const std::string mesh = "../../libigl/meshes/43208.stl";
+//const std::string mesh = "../../libigl/meshes/82257.stl";
+//const std::string mesh = "../../libigl/meshes/358257.stl";
+//const std::string mesh = "../../libigl/meshes/116863.stl";
 const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
 //const std::string mesh = "../../libigl/meshes/tetrahedron.obj";
 //const std::string mesh = "../../libigl/meshes/cube.obj";
 
-int main(int argc, char *argv[]) {
+int main_before(int argc, char *argv[]) {
     using namespace std;
     using namespace Eigen;
-    if (!igl::readOBJ(mesh, V, F)) {
+
+    Eigen::MatrixXd temp_v;
+
+    if (!igl::readOBJ(mesh, temp_v, F)) {
         std::cout << "Failed to load obj\n";
     }
     //Eigen::MatrixXi N;
     //ifstream stl_file(mesh);
-    //if(!igl::readSTL(stl_file, V, F, N)){
+    //if(!igl::readSTL(stl_file, temp_v, F, N)){
     //  std::cout << "Failed to load stl\n";
     //}
     //stl_file.close();
+
+    TetMesh::normalize_mesh(temp_v, V);
 
     // Tetrahedralize the interior
     MatrixXd TV;
@@ -639,15 +648,18 @@ int main(int argc, char *argv[]) {
 int main_after(int argc, char *argv[]) {
     using namespace std;
     using namespace Eigen;
-    if (!igl::readOBJ(mesh, V, F)) {
-        std::cout << "Failed to load obj\n";
-    }
-    //Eigen::MatrixXi N;
-    //ifstream stl_file(mesh);
-    //if(!igl::readSTL(stl_file, V, F, N)){
-    //  std::cout << "Failed to load stl\n";
+    //if (!igl::readOBJ(mesh, V, F)) {
+    //    std::cout << "Failed to load obj\n";
     //}
-    //stl_file.close();
+    Eigen::MatrixXi N;
+    ifstream stl_file(mesh);
+    MatrixXd temp_v;
+    if(!igl::readSTL(stl_file, V, F, N)){
+        std::cout << "Failed to load stl\n";
+    }
+    stl_file.close();
+
+    TetMesh::normalize_mesh(temp_v, V);
 
     // Tetrahedralize the interior
     MatrixXd TV;
@@ -674,30 +686,114 @@ int main_after(int argc, char *argv[]) {
     Eigen::MatrixXi BF;
     Eigen::VectorXi BJ, BK;
 
-    Eigen::VectorXi offset, indexes;
-    TetMesh::vertex_to_TT_map(TT, TV, offset, indexes);
+    //Eigen::VectorXi offset, indexes;
+    //TetMesh::vertex_to_TT_map(TT, TV, offset, indexes);
 
-    Eigen::MatrixXi flips23, flips32, TF23;
-    TetMesh::flips(TT, TN, flips23, flips32, TF23);
+    //Eigen::MatrixXi flips23, flips32, TF23;
+    //TetMesh::flips(TT, TN, flips23, flips32, TF23);
 
-    cout << "offset:" << endl << offset << endl << endl;
-    cout << "indexes:" << endl << indexes << "   (" << TT.size() << " - " << indexes.size() << ")" << endl << endl;
+    //cout << "offset:" << endl << offset << endl << endl;
+    //cout << "indexes:" << endl << indexes << "   (" << TT.size() << " - " << indexes.size() << ")" << endl << endl;
 
-    Eigen::MatrixXi TT_new(3, 4);
+    //Eigen::MatrixXi TT_new(3, 4);
 
-    TT_new.row(0) = TT.row(flips32(0,0));
-    TT_new.row(1) = TT.row(flips32(0,1));
-    TT_new.row(2) = TT.row(flips32(0,2));
+    //TT_new.row(0) = TT.row(flips32(0,0));
+    //TT_new.row(1) = TT.row(flips32(0,1));
+    //TT_new.row(2) = TT.row(flips32(0,2));
 
     //tetrahedra.flip23(flips23(4,0), flips23(4,1), tetrahedra.TT, TN, TV);
     //tetrahedra.flip32(flips32(0, 0), flips32(0, 1), flips32(0, 2), tetrahedra.TT, TN, TV);
 
-    cout << "TT:" << endl << tetrahedra.TT << endl << endl;
+   // cout << "TT:" << endl << tetrahedra.TT << endl << endl;
+
+    MatrixXd TV_gpu = TV.transpose();
+    MatrixXi TT_gpu = TT.transpose();
+    MatrixXi TN_gpu = TN.transpose();
+
+    MatrixXi TT_out_gpu(4, TT.rows()*3);
+    MatrixXi TN_out_gpu(4, TN.rows()*3);
+    int new_size = 0;
+#ifdef HIP_ENABLED
+    //VertexProcessor::smooth_tets_naive(TV_gpu.data(), TV.rows(), edges_gpu.data(), edges.rows(), prefix_sum_gpu.data());
+    new_size = VertexProcessor::flip_23(TV_gpu.data(), TV.rows(),
+                             TT_gpu.data(), TN_gpu.data(), TT.rows(),
+                             TT_out_gpu.data(), TN_out_gpu.data());
+#endif
+
+
+    MatrixXi TT_out;
+    MatrixXi TN_out;
+
+    TT_out.noalias() = TT_out_gpu.transpose();
+    TN_out.noalias() = TN_out_gpu.transpose();
+
+    auto TT_out_b = TT_out.topRows(new_size);
+    auto TN_out_b = TN_out.topRows(new_size);
+
+    //cout << "TT:" << endl << TT_out_b << endl << endl;
 
     // Add matcap
     igl::stb::read_image("../../libigl/matcap/ceramic_dark.png", R, G, B, A);
 
-    TetMesh::display(TT_new, TV, dF, dV);
+    TetMesh::display(TT_out_b, TV, dF, dV);
+    //TetMesh::display(TT, TV, dF, dV);
+
+    // Attach a menu plugin
+    viewer.plugins.push_back(&plugin);
+    plugin.widgets.push_back(&menu);
+
+    viewer.core().background_color.setConstant(0.3f);
+    //viewer.callback_key_down = &key_down;
+    //key_down(viewer, '5', 0);
+    viewer.data().clear();
+    viewer.data().set_face_based(true);
+    viewer.data().set_mesh(dV, dF);
+    viewer.data().set_texture(R, G, B, A);
+    viewer.data().use_matcap = true;
+    viewer.launch();
+}
+int main(int argc, char *argv[]) {
+    using namespace std;
+    using namespace Eigen;
+    MatrixXd temp_v;
+    if (!igl::readOBJ(mesh, temp_v, F)) {
+        std::cout << "Failed to load obj\n";
+    }
+    //Eigen::MatrixXi N;
+    //ifstream stl_file(mesh);
+    //if(!igl::readSTL(stl_file, V, F, N)){
+    //    std::cout << "Failed to load stl\n";
+    //}
+    //stl_file.close();
+
+    TetMesh::normalize_mesh(temp_v, V);
+
+    // Tetrahedralize the interior
+    MatrixXd TV;
+    MatrixXi TT;
+    MatrixXi TF;
+
+    igl::copyleft::tetgen::tetrahedralize(V, F, "pq1.414n", TV, TT, TF);
+
+    MatrixXd TV_gpu = TV.transpose();
+    MatrixXi TT_gpu = TT.transpose();
+
+#ifdef HIP_ENABLED
+    VertexProcessor::printGPUInfo();
+    VertexProcessor::smooth_tets(TV_gpu.data(), TV.rows(), TT_gpu.data(), TT.rows());
+#endif
+
+    MatrixXd TV_out;
+    MatrixXi TT_out;
+
+    TV_out.noalias() = TV_gpu.transpose();
+    TT_out.noalias() = TT_gpu.transpose();
+
+    // Add matcap
+    igl::stb::read_image("../../libigl/matcap/ceramic_dark.png", R, G, B, A);
+
+    TetMesh::display(TT, TV_out, dF, dV);
+    //TetMesh::display(TT, TV, dF, dV);
 
     // Attach a menu plugin
     viewer.plugins.push_back(&plugin);
