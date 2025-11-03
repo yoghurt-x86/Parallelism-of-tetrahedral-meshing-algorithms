@@ -19,6 +19,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <sys/time.h>
+#include <time.h>
 #include <map>
 
 #ifdef HIP_ENABLED
@@ -69,6 +71,15 @@ Display display = DISPLAY_INPUT;
 ColorMap colorMap = COLORMAP_av_ratio;
 double slice_t = 0.5;
 double filter_t = 0.0;
+
+int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
+{
+    unsigned int resolution=1000000;
+    long int diff = (t2->tv_usec + resolution * t2->tv_sec) - (t1->tv_usec + resolution * t1->tv_sec);
+    result->tv_sec = diff / resolution;
+    result->tv_usec = diff % resolution;
+    return (diff<0);
+}
 
 void create_delaunay(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F) {
     using namespace Eigen;
@@ -316,17 +327,23 @@ void update_view(igl::opengl::glfw::Viewer &viewer) {
         viewer.data().set_mesh(dV, dF);
         viewer.data().set_colors(dC);
 
-        int num_bins = 255;
+        int num_bins = 100;
         double min_val = colors.minCoeff();
         double max_val = colors.maxCoeff();
+	min_val = 0.0;
+	max_val = 0.00005;
         double bin_width = (max_val - min_val) / num_bins;
         Eigen::VectorXi counts;
         Eigen::VectorXi bin_indices;
+        //Eigen::VectorXd bin_edges = Eigen::VectorXd::LinSpaced(num_bins + 1, 0.0, 1.0);
         Eigen::VectorXd bin_edges = Eigen::VectorXd::LinSpaced(num_bins + 1, min_val, max_val);
 
         igl::histc(colors, bin_edges, dHistogram, bin_indices);
+      
 
-        //igl::sort(colors, 1, true, dHistogram);
+	std::cout << "Histogram range: " << min_val << " to " << max_val << std::endl;
+	std::cout << "Histogram range: \n" << dHistogram << std::endl;
+
     }
 }
 
@@ -446,7 +463,7 @@ void draw_menu() {
             colorMap = COLORMAP_aspect_ratio;
             update_view(viewer);
         }
-        if (ImGui::RadioButton("Max dihedral angle", &e, 4)) {
+        if (ImGui::RadioButton("Min dihedral angle", &e, 4)) {
             colorMap = COLORMAP_dihedral_angles;
             update_view(viewer);
         }
@@ -471,7 +488,9 @@ void draw_menu() {
         }
 
         ImGui::PlotHistogram("", &getter, dHistogram.data(), dHistogram.size(), 0, NULL, dHistogram.minCoeff(),
-                             dHistogram.maxCoeff(), ImVec2(0, 80.0f));
+                             dHistogram.maxCoeff(), ImVec2(0, 200.0f));
+
+        ImGui::Text("Range: of tets: %f - %f", dHistogram.minCoeff(), dHistogram.maxCoeff());
 #ifdef HIP_ENABLED
         if (ImGui::Button("Smooth on GPU")) {
             using namespace std;
@@ -554,12 +573,10 @@ void draw_menu() {
     ImGui::End();
 }
 
-//const std::string mesh = "../../libigl/meshes/53754.stl";
-//const std::string mesh = "../../libigl/meshes/43208.stl";
-//const std::string mesh = "../../libigl/meshes/82257.stl";
-//const std::string mesh = "../../libigl/meshes/358257.stl";
-//const std::string mesh = "../../libigl/meshes/116863.stl";
-const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
+//const std::string mesh = "../../libigl/meshes/spot_triangulated.obj";
+const std::string mesh = "../../libigl/meshes/spot_triangulated_lvl4.obj";
+//const std::string mesh = "../../libigl/meshes/bunny1.obj";
+//const std::string mesh = "../../libigl/meshes/blub_triangulated.obj";
 //const std::string mesh = "../../libigl/meshes/tetrahedron.obj";
 //const std::string mesh = "../../libigl/meshes/cube.obj";
 
@@ -593,7 +610,7 @@ int main_before(int argc, char *argv[]) {
     int numRegions;
 
     //igl::copyleft::tetgen::tetrahedralize(V,F, H, VM, FM, Reg, "pq1.414a0.1n", TV,TT,TF,TM, TR, TN, PT, FT, numRegions );
-    igl::copyleft::tetgen::tetrahedralize(V, F, H, VM, FM, Reg, "pq1.414n", TV, TT, TF, TM, TR, TN, PT, FT, numRegions);
+    igl::copyleft::tetgen::tetrahedralize(V, F, H, VM, FM, Reg, "pq1.5/15", TV, TT, TF, TM, TR, TN, PT, FT, numRegions);
 
     cout << "H:" << endl << H << endl << endl;
     cout << "PT:" << endl << PT << endl << endl;
@@ -604,25 +621,8 @@ int main_before(int argc, char *argv[]) {
     cout << "TF:" << endl << TF.rows() << endl << endl;
     cout << "TT:" << endl << TT << endl << endl;
 
-    Eigen::MatrixXi BF;
-    Eigen::VectorXi BJ, BK;
     tetrahedra = TetMesh(TV, TT, TF);
 
-    Eigen::VectorXi offset, indexes;
-    TetMesh::vertex_to_TT_map(tetrahedra.TT, tetrahedra.TV, offset, indexes);
-
-    Eigen::MatrixXi flips23, flips32, TF23;
-    TetMesh::flips(tetrahedra.TT, TN, flips23, flips32, TF23);
-
-    cout << "offset:" << endl << offset << endl << endl;
-    cout << "indexes:" << endl << indexes << "   (" << TT.size() << " - " << indexes.size() << ")" << endl << endl;
-
-    //tetrahedra.flip23(flips23(4,0), flips23(4,1), tetrahedra.TT, TN, TV);
-    TetMesh::flip32(flips32(0, 0), flips32(0, 1), flips32(0, 2), tetrahedra.TT, TN, TV);
-
-    //tetrahedra.TT = TT_new;
-
-    cout << "TT:" << endl << tetrahedra.TT << endl << endl;
 
     // Create delaunay using cgal
     create_delaunay(V, F);
@@ -645,19 +645,19 @@ int main_before(int argc, char *argv[]) {
     viewer.launch();
 }
 
-int main_after(int argc, char *argv[]) {
+int benchmark_gpu_flipping(int argc, char *argv[]) {
     using namespace std;
     using namespace Eigen;
-    //if (!igl::readOBJ(mesh, V, F)) {
-    //    std::cout << "Failed to load obj\n";
-    //}
-    Eigen::MatrixXi N;
-    ifstream stl_file(mesh);
     MatrixXd temp_v;
-    if(!igl::readSTL(stl_file, V, F, N)){
-        std::cout << "Failed to load stl\n";
+    if (!igl::readOBJ(mesh, temp_v, F)) {
+        std::cout << "Failed to load obj\n";
     }
-    stl_file.close();
+    //Eigen::MatrixXi N;
+    //ifstream stl_file(mesh);
+    //if(!igl::readSTL(stl_file, V, F, N)){
+    //    std::cout << "Failed to load stl\n";
+    //}
+    //stl_file.close();
 
     TetMesh::normalize_mesh(temp_v, V);
 
@@ -714,13 +714,26 @@ int main_after(int argc, char *argv[]) {
     MatrixXi TN_out_gpu(4, TN.rows()*3);
     int new_size = 0;
 #ifdef HIP_ENABLED
-    //VertexProcessor::smooth_tets_naive(TV_gpu.data(), TV.rows(), edges_gpu.data(), edges.rows(), prefix_sum_gpu.data());
+    unsigned long int elapsed;
+    struct timeval t_start, t_end, t_diff;
+    // dry run
     new_size = VertexProcessor::flip_23(TV_gpu.data(), TV.rows(),
                              TT_gpu.data(), TN_gpu.data(), TT.rows(),
                              TT_out_gpu.data(), TN_out_gpu.data());
+
+    gettimeofday(&t_start, NULL);
+    int iterations = 10;
+
+    for (int i = 0; i<iterations; ++i) {
+    new_size = VertexProcessor::flip_23(TV_gpu.data(), TV.rows(),
+                             TT_gpu.data(), TN_gpu.data(), TT.rows(),
+                             TT_out_gpu.data(), TN_out_gpu.data());
+    }
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec) / iterations;
+    std::cout << "Run 2-3 flips on GPU in: " <<  elapsed << " microsecs per iteration" << std::endl;
 #endif
-
-
     MatrixXi TT_out;
     MatrixXi TN_out;
 
@@ -752,16 +765,21 @@ int main_after(int argc, char *argv[]) {
     viewer.data().use_matcap = true;
     viewer.launch();
 }
-int main(int argc, char *argv[]) {
+
+int benchmark_tetgen(int argc, char *argv[]) {
     using namespace std;
     using namespace Eigen;
+
+    unsigned long int elapsed;
+    struct timeval t_start, t_end, t_diff;
+
     MatrixXd temp_v;
     if (!igl::readOBJ(mesh, temp_v, F)) {
         std::cout << "Failed to load obj\n";
     }
     //Eigen::MatrixXi N;
     //ifstream stl_file(mesh);
-    //if(!igl::readSTL(stl_file, V, F, N)){
+    //if(!igl::readSTL(stl_file, temp_v, F, N)){
     //    std::cout << "Failed to load stl\n";
     //}
     //stl_file.close();
@@ -773,14 +791,56 @@ int main(int argc, char *argv[]) {
     MatrixXi TT;
     MatrixXi TF;
 
-    igl::copyleft::tetgen::tetrahedralize(V, F, "pq1.414n", TV, TT, TF);
+    // Dry run
+    igl::copyleft::tetgen::tetrahedralize(V, F, "pq1.5/15", TV, TT, TF);
+
+    // measure average of runs
+    gettimeofday(&t_start, NULL);
+    int iterations = 30;
+    for (int i = 0; i < iterations; ++i) {
+      igl::copyleft::tetgen::tetrahedralize(V, F, "pq1.5/15", TV, TT, TF);
+    }
+
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec) / iterations;
+    std::cout << "Run tetgen on CPU in: " <<  elapsed << " microsecs per iteration" << std::endl;
+}
+
+int benchmark_smoothing(int argc, char *argv[]) {
+    using namespace std;
+    using namespace Eigen;
+    MatrixXd temp_v;
+    if (!igl::readOBJ(mesh, temp_v, F)) {
+        std::cout << "Failed to load obj\n";
+    }
+    //Eigen::MatrixXi N;
+    //ifstream stl_file(mesh);
+    //if(!igl::readSTL(stl_file, temp_v, F, N)){
+    //    std::cout << "Failed to load stl\n";
+    //}
+    //stl_file.close();
+
+    TetMesh::normalize_mesh(temp_v, V);
+
+    // Tetrahedralize the interior
+    MatrixXd TV;
+    MatrixXi TT;
+    MatrixXi TF;
+
+    igl::copyleft::tetgen::tetrahedralize(V, F, "pq1.5/15", TV, TT, TF);
+
+    cout << "Vertices: " << TV.rows() << endl;
+    cout << "Tetrahedra: " << TT.rows() << endl;
+
+    TetMesh::spatial_sort(TV, TT);
 
     MatrixXd TV_gpu = TV.transpose();
     MatrixXi TT_gpu = TT.transpose();
 
 #ifdef HIP_ENABLED
     VertexProcessor::printGPUInfo();
-    VertexProcessor::smooth_tets(TV_gpu.data(), TV.rows(), TT_gpu.data(), TT.rows());
+    VertexProcessor::smooth_tets(TV_gpu.data(), TV.rows(), TT_gpu.data(), TT.rows(), 50);
 #endif
 
     MatrixXd TV_out;
@@ -808,4 +868,10 @@ int main(int argc, char *argv[]) {
     viewer.data().set_texture(R, G, B, A);
     viewer.data().use_matcap = true;
     viewer.launch();
+}
+int main(int argc, char *argv[]) {
+  //benchmark_gpu_flipping(argc, argv);
+  //benchmark_tetgen(argc, argv);
+  benchmark_smoothing(argc, argv);
+  //main_before(argc, argv);
 }

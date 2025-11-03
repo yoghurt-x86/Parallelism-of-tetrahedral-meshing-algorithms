@@ -29,6 +29,8 @@ public:
     static void flip23(int i1, int i2, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
     static void flip32(int i1, int i2, int i3, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
     static void flip_everything(const Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV);
+    static void spatial_sort(Eigen::MatrixXd& TV, Eigen::MatrixXi& TT);
+    static void randomise_order(Eigen::MatrixXd& TV, Eigen::MatrixXi& TT);
     static void display(const Eigen::MatrixXi TT, const Eigen::MatrixXd TV, Eigen::MatrixXi &dF, Eigen::MatrixXd &dV);
     // Data
   //

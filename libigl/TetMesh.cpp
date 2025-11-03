@@ -1,6 +1,7 @@
 #include "TetMesh.h"
 #include <iostream>
 #include <cmath>
+#include <random>
 #include <algorithm>
 #include <numeric>
 #include <set>
@@ -9,6 +10,10 @@
 #include <igl/barycenter.h>
 #include <igl/jet.h>
 #include <igl/cumsum.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/spatial_sort.h>
+#include <CGAL/Spatial_sort_traits_adapter_3.h>
+#include <vector>
 
 TetMesh::TetMesh() {
 }
@@ -22,8 +27,8 @@ void TetMesh::points_changed() {
     compute_dihedral_angles(TT, TV, dihedral_angles);
     count_neighbors(TT, AM, max_vertex_neigbors);
     compute_is_delaunay(TT, TV, AM, is_delaunay);
-    compute_boundary_flags(TV, TF, boundary_flag);
-    compute_boundary_flags(TV, TF, boundary_flag);
+    //compute_boundary_flags(TV, TF, boundary_flag);
+    //compute_boundary_flags(TV, TF, boundary_flag);
 }
 
 TetMesh::TetMesh(const Eigen::MatrixXd &_TV, const Eigen::MatrixXi &_TT, const Eigen::MatrixXi &_TF) {
@@ -447,12 +452,12 @@ void TetMesh::area_volume_ratio(const Eigen::MatrixXi &TT, const Eigen::MatrixXd
         auto yz = ((a.y() - c.y()) * (b.z() - c.z())) - ((b.y() - c.y()) * (a.z() - c.z()));
         auto zx = ((a.z() - c.z()) * (b.x() - c.x())) - ((b.z() - c.z()) * (a.x() - c.x()));
         auto xy = ((a.x() - c.x()) * (b.y() - c.y())) - ((b.x() - c.x()) * (a.y() - c.y()));
-        return yz * yz + zx * zx + xy * xy;
+        return (yz * yz + zx * zx + xy * xy) * 0.25;
     };
 
     out.resize(TT.rows());
     for (unsigned i = 0; i < TT.rows(); ++i) {
-        const Eigen::Block<const Eigen::Matrix<double, -1, -1>, 1> a = TV.row(TT(i, 0));
+        const auto a = TV.row(TT(i, 0));
         const auto b = TV.row(TT(i, 2)); // tetgen uses a different vertex order than Shewchuk...
         const auto c = TV.row(TT(i, 1));
         const auto d = TV.row(TT(i, 3));
@@ -462,8 +467,8 @@ void TetMesh::area_volume_ratio(const Eigen::MatrixXi &TT, const Eigen::MatrixXd
         double a3 = area(a, d, b);
         double a4 = area(a, b, c);
 
-        double area_sum = (a1 + a2 + a3 + a4) * 0.25 * 0.75;
-        out(i) = (volumes(i) / area_sum) * 2.61505662862; //3^(7/8)
+        double area_sum = pow(a1 + a2 + a3 + a4, 0.75);
+        out(i) = (volumes(i) / area_sum) * 6.83852117086433292598068; //3^(7/4)
     }
 }
 
@@ -491,7 +496,7 @@ void TetMesh::insphere_to_circumsphere(const Eigen::MatrixXi &TT, const Eigen::M
         const Vector3d u = (b - d);
         const Vector3d v = (c - d);
 
-        const double tabs = t.dot(t);
+        const double tabs = t.dot(t); //t dot t = |t|^2
         const double uabs = u.dot(u);
         const double vabs = v.dot(v);
 
@@ -541,7 +546,7 @@ void TetMesh::compute_aspect_ratios(const Eigen::MatrixXi &TT, const Eigen::Matr
         }
         auto max_crosswx = crosses.rowwise().norm().array().maxCoeff();
 
-        out(i) = (volumes(i) / max_crosswx) * 6.0 * M_SQRT2;
+        out(i) = (volumes(i) / (max_crosswx * lmax)) * 6.0 * M_SQRT2;
     }
 }
 
@@ -557,7 +562,7 @@ void TetMesh::compute_dihedral_angles(const Eigen::MatrixXi &TT, const Eigen::Ma
         const Vector3d c = TV.row(TT(i, 1));
         const Vector3d d = TV.row(TT(i, 3));
 
-        out(i) = min_dihedral_angle(a, b, c, d);
+        out(i) = min_dihedral_angle(a, b, c, d) / 1.230959417340774682134929178247; //arcsin(2sqrt(2)/3)
     }
 }
 void TetMesh::display(const Eigen::MatrixXi TT, const Eigen::MatrixXd TV,
@@ -701,6 +706,172 @@ void TetMesh::smooth(const double t) {
     this->points_changed();
 }
 
+void TetMesh::spatial_sort(Eigen::MatrixXd& TV, Eigen::MatrixXi& TT) {
+    using namespace std;
+    using namespace Eigen;
+
+    typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+    typedef K::Point_3 Point_3;
+
+    const int num_vertices = TV.rows();
+    const int num_tets = TT.rows();
+
+    // Step 1: Create a vector of pairs (point, original_index)
+    typedef pair<Point_3, size_t> Point_with_index;
+    vector<Point_with_index> points_with_indices;
+    points_with_indices.reserve(num_vertices);
+    for (int i = 0; i < num_vertices; ++i) {
+        points_with_indices.push_back(
+            make_pair(Point_3(TV(i, 0), TV(i, 1), TV(i, 2)), i)
+        );
+    }
+
+    // Step 2: Create a custom spatial sorting traits that works with pairs
+    struct Point_with_index_traits {
+        typedef Point_with_index Point_3;  // Changed from Point_2 to Point_3
+
+        struct Less_x_3 {
+            bool operator()(const Point_3& p, const Point_3& q) const {
+                return p.first.x() < q.first.x();
+            }
+        };
+
+        struct Less_y_3 {
+            bool operator()(const Point_3& p, const Point_3& q) const {
+                return p.first.y() < q.first.y();
+            }
+        };
+
+        struct Less_z_3 {
+            bool operator()(const Point_3& p, const Point_3& q) const {
+                return p.first.z() < q.first.z();
+            }
+        };
+
+        Less_x_3 less_x_3_object() const { return Less_x_3(); }
+        Less_y_3 less_y_3_object() const { return Less_y_3(); }
+        Less_z_3 less_z_3_object() const { return Less_z_3(); }
+    };
+
+    // Step 3: Sort points using CGAL's spatial_sort
+    CGAL::spatial_sort(
+        points_with_indices.begin(),
+        points_with_indices.end(),
+        Point_with_index_traits()
+    );
+
+    // Step 4: Create mapping from old index to new index
+    vector<int> old_to_new(num_vertices);
+    for (size_t new_idx = 0; new_idx < points_with_indices.size(); ++new_idx) {
+        size_t old_idx = points_with_indices[new_idx].second;
+        old_to_new[old_idx] = new_idx;
+    }
+
+    // Step 5: Reorder vertices based on sorted indices
+    MatrixXd TV_reordered(num_vertices, 3);
+    for (size_t new_idx = 0; new_idx < points_with_indices.size(); ++new_idx) {
+        size_t old_idx = points_with_indices[new_idx].second;
+        TV_reordered.row(new_idx) = TV.row(old_idx);
+    }
+
+    // Step 6: Update tetrahedra indices to use new vertex ordering
+    MatrixXi TT_reordered = TT;
+    for (int t = 0; t < num_tets; ++t) {
+        for (int v = 0; v < 4; ++v) {
+            TT_reordered(t, v) = old_to_new[TT(t, v)];
+        }
+    }
+
+    // Step 7: Sort tetrahedra by their first vertex (for additional locality)
+    // Create pairs of (first_vertex_index, tet_index)
+    vector<pair<int, int>> tet_ordering;
+    tet_ordering.reserve(num_tets);
+    for (int t = 0; t < num_tets; ++t) {
+        // Use the minimum vertex index as sorting key for better locality
+        int min_vertex = min({TT_reordered(t, 0), TT_reordered(t, 1),
+                             TT_reordered(t, 2), TT_reordered(t, 3)});
+        tet_ordering.push_back({min_vertex, t});
+    }
+
+    // Sort tetrahedra by minimum vertex index
+    sort(tet_ordering.begin(), tet_ordering.end());
+
+    // Reorder tetrahedra based on sorted order
+    MatrixXi TT_final(num_tets, 4);
+    for (int new_t = 0; new_t < num_tets; ++new_t) {
+        int old_t = tet_ordering[new_t].second;
+        TT_final.row(new_t) = TT_reordered.row(old_t);
+    }
+
+    // Update the original matrices
+    TV = TV_reordered;
+    TT = TT_final;
+
+    cout << "Mesh reordered for cache locality using CGAL spatial_sort" << endl;
+    cout << "Vertices: " << num_vertices << ", Tetrahedra: " << num_tets << endl;
+}
+
+void TetMesh::randomise_order(Eigen::MatrixXd& TV, Eigen::MatrixXi& TT) {
+        using namespace std;
+    using namespace Eigen;
+
+    const int num_vertices = TV.rows();
+    const int num_tets = TT.rows();
+    const int seed = 42;
+
+    // Create random number generator
+    mt19937 rng(seed);
+
+    // Step 1: Create random permutation of vertex indices
+    vector<int> vertex_permutation(num_vertices);
+    for (int i = 0; i < num_vertices; ++i) {
+        vertex_permutation[i] = i;
+    }
+    shuffle(vertex_permutation.begin(), vertex_permutation.end(), rng);
+
+    // Step 2: Create mapping from old index to new index
+    vector<int> old_to_new(num_vertices);
+    for (int new_idx = 0; new_idx < num_vertices; ++new_idx) {
+        int old_idx = vertex_permutation[new_idx];
+        old_to_new[old_idx] = new_idx;
+    }
+
+    // Step 3: Reorder vertices based on random permutation
+    MatrixXd TV_reordered(num_vertices, 3);
+    for (int new_idx = 0; new_idx < num_vertices; ++new_idx) {
+        int old_idx = vertex_permutation[new_idx];
+        TV_reordered.row(new_idx) = TV.row(old_idx);
+    }
+
+    // Step 4: Update tetrahedra indices to use new vertex ordering
+    MatrixXi TT_reordered = TT;
+    for (int t = 0; t < num_tets; ++t) {
+        for (int v = 0; v < 4; ++v) {
+            TT_reordered(t, v) = old_to_new[TT(t, v)];
+        }
+    }
+
+    // Step 5: Create random permutation of tetrahedra
+    vector<int> tet_permutation(num_tets);
+    for (int i = 0; i < num_tets; ++i) {
+        tet_permutation[i] = i;
+    }
+    shuffle(tet_permutation.begin(), tet_permutation.end(), rng);
+
+    // Step 6: Reorder tetrahedra based on random permutation
+    MatrixXi TT_final(num_tets, 4);
+    for (int new_t = 0; new_t < num_tets; ++new_t) {
+        int old_t = tet_permutation[new_t];
+        TT_final.row(new_t) = TT_reordered.row(old_t);
+    }
+
+    // Update the original matrices
+    TV = TV_reordered;
+    TT = TT_final;
+
+    cout << "Mesh reordered with random ordering (seed=" << seed << ")" << endl;
+    cout << "Vertices: " << num_vertices << ", Tetrahedra: " << num_tets << endl;
+}
 void TetMesh::flip23(int i1, int i2, Eigen::MatrixXi &TT, const Eigen::MatrixXi &TN, const Eigen::MatrixXd &TV) {
     using namespace std;
     using namespace Eigen;

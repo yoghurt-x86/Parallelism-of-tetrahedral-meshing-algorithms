@@ -3,6 +3,10 @@
 #include <iostream>
 #include <hipcub/hipcub.hpp>
 #include <Eigen/Dense>
+#include <sys/time.h>
+#include <time.h>
+#include <format>
+
 
 
 const size_t BLOCK_SIZE = 32;
@@ -114,7 +118,7 @@ __global__ void smooth_by_edges(double* V, int* E, int *prefix_sum, int edge_cou
     }
 }
 
-__global__ void smooth_by_vertex_smart(
+__global__ void smooth_by_vertex_blocksort(
     double* TV, int vertex_count,
     int* TT,    int tet_count,
     int* row_offset, int* col_indices, int num_edges,
@@ -127,11 +131,7 @@ __global__ void smooth_by_vertex_smart(
 
     // Partition shared memory
     int* shared_col_indices = (int*)shared_mem;
-    int size_shared_col_indices = blockDim.x * 32 * sizeof(int);
-    double3* shared_vertices = (double3*)(shared_mem + size_shared_col_indices);
-
-
-
+    double* shared_vertices = (double*)(shared_mem);
 
     // Step 1: Find the range of col_indices this block needs
     __shared__ int block_begin_scan, block_end_scan;
@@ -145,7 +145,7 @@ __global__ void smooth_by_vertex_smart(
 
     __syncthreads();
 
-    // Step 2: Cooperatively load col_indices in a coalesced manner
+    // Cooperatively load indices in a coalesced manner
     int block_num_indices = block_end_scan - block_begin_scan;
     for(int i = tid; i < block_num_indices; i += blockDim.x) {
         shared_col_indices[i] = col_indices[block_begin_scan + i];
@@ -153,33 +153,86 @@ __global__ void smooth_by_vertex_smart(
 
     __syncthreads();
 
-    // Sort using CUB - this sorts across all threads cooperatively
-    typedef hipcub::BlockRadixSort<int, BLOCK_SIZE, 32, int> BlockRadixSort;
+    typedef hipcub::BlockRadixSort<int, BLOCK_SIZE, 96, int> BlockRadixSort;
     __shared__ typename BlockRadixSort::TempStorage temp_storage;
 
+    int thread_keys[96];
+    int thread_values[96];
+
+    int begin_scan = row_offset[idx];
+    int end_scan = row_offset[idx+1];
+    int num_neighbors = end_scan - begin_scan;
+    {
+        begin_scan = begin_scan - block_begin_scan;
+        end_scan   = end_scan - block_begin_scan;
+
+        if(idx >= vertex_count)
+            num_neighbors = 0;
+        for(int i=0; i<num_neighbors; ++i){
+            int TV_idx = shared_col_indices[begin_scan + i];
+            thread_keys[i*3+0] = TV_idx*3+0;
+            thread_keys[i*3+1] = TV_idx*3+1;
+            thread_keys[i*3+2] = TV_idx*3+2;
+            thread_values[i*3+0] = (96 * tid) + i*3+0;
+            thread_values[i*3+1] = (96 * tid) + i*3+1;
+            thread_values[i*3+2] = (96 * tid) + i*3+2;
+        }
+        for(int i=num_neighbors; i<32; ++i){
+            thread_keys[i*3+0] = INT_MAX;
+            thread_keys[i*3+1] = INT_MAX;
+            thread_keys[i*3+2] = INT_MAX;
+            thread_values[i*3+0] = (96 * tid) + i*3+0;
+            thread_values[i*3+1] = (96 * tid) + i*3+1;
+            thread_values[i*3+2] = (96 * tid) + i*3+2;
+        }
+
+        //__syncthreads();
+        //if(idx == 0) {
+        //    for (int i=0; i<96; ++i){
+        //        printf("k: %d - v: %d\n", thread_keys[i], thread_values[i]);
+        //    }
+        //}
+
+        __syncthreads();
+        BlockRadixSort(temp_storage).SortBlockedToStriped(thread_keys, thread_values);
+        __syncthreads();
+
+        //if(idx == 0) {
+        //    printf("hehe\n");
+        //    for (int i=0; i<96; ++i){
+        //        printf("k: %d - v: %d\n", thread_keys[i], thread_values[i]);
+        //    }
+        //    printf("poooo\n");
+        //}
+
+        for(int i=0; i<96; ++i){
+            int V_coord_idx  = thread_keys[i];
+            int local_V_coord_idx  = thread_values[i];
+            if (V_coord_idx != INT_MAX) {
+                shared_vertices[local_V_coord_idx] = TV[V_coord_idx];
+            } else {
+                shared_vertices[local_V_coord_idx] = 0.0;
+
+            }
+        }
+    }
 
     __syncthreads();
 
     if(idx >= vertex_count) return;
 
-    int begin_scan = row_offset[idx];
-    int end_scan = row_offset[idx+1];
-    int num_neighbors = end_scan - begin_scan;
-
-    begin_scan = begin_scan - block_begin_scan;
-    end_scan   = end_scan - block_begin_scan;
-
     double3 pos = {0.0,0.0,0.0};
-    for(int i=begin_scan; i<end_scan; ++i){
-        pos.x += TV[shared_col_indices[i]*3+0];
-        pos.y += TV[shared_col_indices[i]*3+1];
-        pos.z += TV[shared_col_indices[i]*3+2];
+    for(int i=0; i<32; ++i){
+        pos.x += shared_vertices[(96 * tid) + i*3+0];
+        pos.y += shared_vertices[(96 * tid) + i*3+1];
+        pos.z += shared_vertices[(96 * tid) + i*3+2];
     }
+
     pos *= 1.0 / (double) num_neighbors;
 
     double3 old_pos = { TV[idx*3+0], TV[idx*3+1], TV[idx*3+2] };
 
-    pos = old_pos + 0.9 * (old_pos - pos);
+    pos = old_pos + 0.5 * (pos - old_pos);
 
     TV_out[idx*3+0] = pos.x;
     TV_out[idx*3+1] = pos.y;
@@ -198,7 +251,7 @@ __global__ void smooth_by_vertex_naive(
     int begin_scan = row_offset[idx];
     int end_scan = row_offset[idx+1];
 
-    int num_neighbors = begin_scan - end_scan;
+    int num_neighbors = end_scan - begin_scan;
 
     double3 pos = {0.0,0.0,0.0};
     for(int i=begin_scan; i<end_scan; ++i){
@@ -210,7 +263,7 @@ __global__ void smooth_by_vertex_naive(
 
     double3 old_pos = { TV[idx*3+0], TV[idx*3+1], TV[idx*3+2] };
 
-    pos = old_pos + 0.1 * (old_pos - pos);
+    pos = old_pos + 0.5 * (pos - old_pos);
 
     TV_out[idx*3+0] = pos.x;
     TV_out[idx*3+1] = pos.y;
@@ -396,14 +449,14 @@ __global__ void flip_faces(double* TV,      int  vertex_count,
         double T2_result = min_dihedral_angle(TV, tet2_r);
         double T3_result = min_dihedral_angle(TV, tet3_r);
 
-		double T1_before = min_dihedral_angle(TV, tet1);
-		double T2_before = min_dihedral_angle(TV, tet2);
+	double T1_before = min_dihedral_angle(TV, tet1);
+	double T2_before = min_dihedral_angle(TV, tet2);
 
-		double old_min = std::min(T1_result, T2_result);
-		double new_min = std::min(min(T1_result, T2_result), T3_result);
+	double old_min = std::min(T1_result, T2_result);
+	double new_min = std::min(min(T1_result, T2_result), T3_result);
 
-		double improvement = new_min - old_min;
-		flip_quality[idx] = improvement;
+	double improvement = new_min - old_min;
+	flip_quality[idx] = improvement;
 
 		// For debug purpose:
 		//if (improvement == 0.0) {
@@ -1141,8 +1194,20 @@ void computeCSRAdjacencyCPU(
     *num_edges_out = total_edges;
 }
 
+int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
+{
+    unsigned int resolution=1000000;
+    long int diff = (t2->tv_usec + resolution * t2->tv_sec) - (t1->tv_usec + resolution * t1->tv_sec);
+    result->tv_sec = diff / resolution;
+    result->tv_usec = diff % resolution;
+    return (diff<0);
+}
 
-void smooth_tets(double* TV, int vertex_count, int* TT, int tet_count) {
+
+void smooth_tets(double* TV, int vertex_count, int* TT, int tet_count, int iterations) {
+    unsigned long int elapsed;
+    struct timeval t_start, t_end, t_diff;
+
     // First we need to know edge connectivity:
     int* row_offsets;
     int* col_indices;
@@ -1167,7 +1232,7 @@ void smooth_tets(double* TV, int vertex_count, int* TT, int tet_count) {
     //}
     for (int i=0;i<vertex_count;++i){
         if (row_offsets[i+1] - row_offsets[i] > 32){
-            std::cout << "SHHHHHITIIITTT" << std::endl;
+            std::cout << "Too many neighbors of vertex " << i << ". Cannot smooth" << std::endl;
             return;
         }
     }
@@ -1200,14 +1265,37 @@ void smooth_tets(double* TV, int vertex_count, int* TT, int tet_count) {
     int blocksPerGridEdges = (vertex_count + threadsPerBlock - 1) / threadsPerBlock;
     size_t shared_col_indices_size = threadsPerBlock * 32 * sizeof(int);     // For neighbor indices
     size_t shared_vertices_size = threadsPerBlock * 32 * 3 * sizeof(double); // For neighbor vertex positions
-    size_t shared_mem_size = shared_col_indices_size + shared_vertices_size;
+    size_t shared_mem_size = max(shared_vertices_size, shared_col_indices_size);
+
+
+    std::cout << "Number of vertices: " << vertex_count << std::endl;
+
+    // Dry run
     hipLaunchKernelGGL(smooth_by_vertex_naive, dim3(blocksPerGridEdges), dim3(threadsPerBlock),
-        shared_mem_size, 0,
-        d_TV, vertex_count,
-        d_TT, tet_count,
-        d_row_offsets, d_col_indices, num_edges,
-        d_TV_out);
+         shared_mem_size, 0,
+         d_TV, vertex_count,
+         d_TT, tet_count,
+         d_row_offsets, d_col_indices, num_edges,
+         d_TV_out);
     hipDeviceSynchronize();
+
+    // measure average of runs
+    gettimeofday(&t_start, NULL);
+
+    iterations = 100;
+    for (int i = 0; i < iterations; ++i) {
+        if(i>0)
+            std::swap(d_TV, d_TV_out);
+
+        hipLaunchKernelGGL(smooth_by_vertex_naive, dim3(blocksPerGridEdges), dim3(threadsPerBlock),
+             shared_mem_size, 0,
+             d_TV, vertex_count,
+             d_TT, tet_count,
+             d_row_offsets, d_col_indices, num_edges,
+             d_TV_out);
+        hipDeviceSynchronize();
+
+    }
 
     //{ //DEBUG
     //    using namespace std;
@@ -1217,6 +1305,13 @@ void smooth_tets(double* TV, int vertex_count, int* TT, int tet_count) {
     //    }
     //    cout << endl;
     //}
+
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec) / iterations;
+    //gigaBytesPerSec = 2 * mem_size * 1.0e-3f / elapsed;
+    std::cout << "Run on GPU in: " <<  elapsed << " microsecs per iteration" << std::endl;
+
 
     hipMemcpy(TV, d_TV_out, size_verts, hipMemcpyDeviceToHost);
 

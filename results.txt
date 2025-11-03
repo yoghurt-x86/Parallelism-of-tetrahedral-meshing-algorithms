@@ -1,0 +1,25 @@
+vertices: 107212
+tetrahedra: 486269
+
+
+tetgen tetrahedralising:
+Avareage of 30 runs: 6924505
+
+
+GPU smoothing average of 100 runs:
+spatially sorted + GPU sorting = 1228953
+spatially sorted + GPU naive = 5136
+
+spatially unsorted + GPU sorting 1186346 
+spatially unsorted + GPU naive = 5188
+
+shuffled + GPU sorting = 1191947
+shuffled + GPU naive = 6002
+
+
+average of 10 runs
+flipping on gpu 5114919 
+
+
+
+
